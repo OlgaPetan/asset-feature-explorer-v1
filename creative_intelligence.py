@@ -501,7 +501,7 @@ for i,s in enumerate(SCOPE_TYPES):
                     st.session_state.scope_types.remove(s)
                 else:
                     st.session_state.scope_types.append(s)
-            st.experimental_rerun()
+            st.rerun()
 
 scope_filters=[]
 KEY_MAP={
@@ -656,7 +656,7 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
         with col:
             if st.button(lbl, key=f"top_btn_{mc_key}"):
                 st.session_state.top_asset_metric = mc_key
-                st.experimental_rerun()
+                st.rerun()
 
     sort_mc = st.session_state.top_asset_metric
     sort_label = {m[1]: m[0] for m in metric_btns}[sort_mc]
@@ -1041,16 +1041,16 @@ elif page == "03 · Combination Explorer":
                         if chv!=cr: changed=True
                 for ci in range(len(row_feats),5): cols[ci].empty()
 
-            if changed: st.session_state[ss]=new; st.experimental_rerun()
+            if changed: st.session_state[ss]=new; st.rerun()
 
             r1,r2,_=st.columns([1,1,7])
             with r1:
                 if st.button("↺ Reset",key=f"rst_{mc}_{hash(str(scope_filters))}_{sel_camp}"):
                     st.session_state[ss]=default_sel(combo) if combo else {f:"__any__" for f in ALL_FEATS}
-                    st.experimental_rerun()
+                    st.rerun()
             with r2:
                 if st.button("✕ Clear",key=f"clr_{mc}_{hash(str(scope_filters))}_{sel_camp}"):
-                    st.session_state[ss]={f:"__any__" for f in ALL_FEATS}; st.experimental_rerun()
+                    st.session_state[ss]={f:"__any__" for f in ALL_FEATS}; st.rerun()
 
             # Scoreboard
             scores=score_sel(sub_df,cur)

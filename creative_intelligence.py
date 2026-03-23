@@ -512,7 +512,7 @@ for i,s in enumerate(SCOPE_TYPES):
                     st.session_state.scope_types.remove(s)
                 else:
                     st.session_state.scope_types.append(s)
-            st.experimental_experimental_rerun()
+            st.experimental_rerun()
 
 scope_filters=[]
 KEY_MAP={

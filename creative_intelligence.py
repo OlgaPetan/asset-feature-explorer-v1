@@ -34,23 +34,24 @@ M_COLOR = {
     "Attention_T2B":             BLUE,
     "Persuasion_T2B":            RED,
     "Likeability_Love_Like_T2B": GREEN,
-    "SCD_score":                 PURPLE,
     "Experience_Recall_T2B":     "#B45309",
     "Brand_Linkage_T2B":         "#0E7490",
     "Uniqueness_T2B":            "#6D28D9",
     "Shareability_T2B":          "#065F46",
+    "Tiredness_T2B":             "#9F1239",
 }
 M_LABEL = {
     "Attention_T2B":             "Attention",
     "Persuasion_T2B":            "Persuasion",
     "Likeability_Love_Like_T2B": "Likeability",
-    "SCD_score":                 "SCD Score",
     "Experience_Recall_T2B":     "Experience Recall",
     "Brand_Linkage_T2B":         "Brand Linkage",
     "Uniqueness_T2B":            "Uniqueness",
     "Shareability_T2B":          "Shareability",
+    "Tiredness_T2B":             "Tiredness",
 }
-NEW_METRICS = ["Experience_Recall_T2B","Brand_Linkage_T2B","Uniqueness_T2B","Shareability_T2B"]
+NEW_METRICS = ["Experience_Recall_T2B","Brand_Linkage_T2B","Uniqueness_T2B",
+               "Shareability_T2B","Tiredness_T2B"]
 RULE_STYLE = {
     "Conflict":           ("warn-conflict",     "⚡"),
     "Heterogeneity":      ("warn-heterogeneity","⚠"),
@@ -166,6 +167,10 @@ hr.div{border:none;border-top:1px solid #EAE8E2;margin:1.8rem 0;}
 
 .stButton>button{background:#fff!important;border:1px solid #DAD6D0!important;color:#6A6660!important;border-radius:4px!important;font-size:.88rem!important;width:100%!important;}
 .stButton>button:hover{border-color:#E8002D!important;color:#E8002D!important;}
+
+.scope-btn-wrap{display:flex;gap:.5rem;margin-bottom:.6rem;}
+.scope-btn{display:inline-flex;align-items:center;justify-content:center;padding:.42rem 1.2rem;border-radius:20px;font-size:.82rem;font-weight:500;cursor:pointer;border:1.5px solid #DAD6D0;background:#fff;color:#6A6660;transition:all .15s;white-space:nowrap;}
+.scope-btn.active{background:#E8002D;border-color:#E8002D;color:#fff;font-weight:600;}
 .stTabs [data-baseweb="tab-list"]{background:transparent;border-bottom:1px solid #EAE8E2;gap:0;}
 .stTabs [data-baseweb="tab"]{background:transparent;color:#AAA89E;font-size:.9rem;border-radius:0;padding:.52rem 1.3rem;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;}
 .stTabs [aria-selected="true"]{background:transparent!important;color:#1C1C1C!important;border-bottom:2px solid #E8002D!important;font-weight:600!important;}
@@ -235,8 +240,8 @@ ALL_FEATS    = [
     "occasions","passion_point","moments","music_style","seasonal",
 ]
 SCOPE_COL = {"ou":"operating_unit_code","category":"category",
-             "brand":"brand_name","market":"country_name"}
-ALL_METRICS = list(dict.fromkeys(list(METRICS.keys()) + ["SCD_score"] + NEW_METRICS))
+             "brand":"brand_name","market":"country_name"}  # market kept in SCOPE_COL for backward compat with alerts
+ALL_METRICS = list(dict.fromkeys(list(METRICS.keys()) + NEW_METRICS))
 
 
 # ── html helpers ──────────────────────────────────────────────────────────────
@@ -487,23 +492,24 @@ with st.sidebar:
                 unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SHARED SCOPE + CAMPAIGN FILTER BAR  (appears on every page)
+# SHARED SCOPE FILTER BAR
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown('<div style="padding:1.4rem 0 .3rem 0"></div>', unsafe_allow_html=True)
-st.markdown('<div class="sec-label">01 &nbsp;·&nbsp; Scope &amp; Campaign</div>', unsafe_allow_html=True)
+st.markdown('<div class="sec-label">Scope</div>', unsafe_allow_html=True)
 
-SCOPE_TYPES = ["Global","OU","Category","Brand","Market"]
+SCOPE_TYPES = ["Global","OU","Category","Brand"]
 if "scope_types" not in st.session_state:
     st.session_state.scope_types = ["Global"]
 
-sc = st.columns([1,1,1,1,1,4])
+# Pill-style scope buttons rendered as HTML + st.columns for click handling
+sc = st.columns(len(SCOPE_TYPES) + 2)
 for i,s in enumerate(SCOPE_TYPES):
     with sc[i]:
         active = s in st.session_state.scope_types
         if st.button(f"· {s}" if active else s, key=f"sb_{s}"):
             if s=="Global":
                 st.session_state.scope_types=["Global"]
-                for k in ["sel_ou","sel_cat","sel_brand","sel_market"]:
+                for k in ["sel_ou","sel_cat","sel_brand"]:
                     st.session_state.pop(k,None)
             else:
                 if "Global" in st.session_state.scope_types:
@@ -519,61 +525,33 @@ KEY_MAP={
     "OU":       ("ou",       sorted(df_full["operating_unit_code"].dropna().unique()),"sel_ou"),
     "Category": ("category", sorted(df_full["category"].dropna().unique()),            "sel_cat"),
     "Brand":    ("brand",    sorted(df_full["brand_name"].dropna().unique()),           "sel_brand"),
-    "Market":   ("market",   sorted(df_full["country_name"].dropna().unique()),         "sel_market"),
 }
 active_types = st.session_state.scope_types
 if active_types and "Global" not in active_types:
-    vcols=st.columns(len(active_types)+1)
+    vcols=st.columns(len(active_types))
     for i,stype in enumerate(active_types):
         with vcols[i]:
             tk,opts,sk=KEY_MAP[stype]
             sv=st.selectbox(f"Select {stype}",opts,key=sk)
             scope_filters.append((tk,sv))
-    # campaign within scope
-    sub_pre=df_full.copy()
-    for t,v in scope_filters:
-        sub_pre=sub_pre[sub_pre[SCOPE_COL[t]]==v]
-    cdf=(sub_pre[["campaign_sk_id","campaign_display_name","campaign_code"]]
-         .drop_duplicates("campaign_sk_id").sort_values("campaign_display_name"))
-    with vcols[len(active_types)]:
-        clabels=["All campaigns"]+[f"{r['campaign_display_name']} ({r['campaign_code']})"
-                                    for _,r in cdf.iterrows()]
-        cids=[None]+cdf["campaign_sk_id"].tolist()
-        ci=st.selectbox("Campaign",range(len(clabels)),
-                         format_func=lambda i:clabels[i],key="sel_camp")
-        sel_camp=cids[ci]
-else:
-    cdf_g=(df_full[["campaign_sk_id","campaign_display_name","campaign_code"]]
-           .drop_duplicates("campaign_sk_id").sort_values("campaign_display_name"))
-    clabels_g=["All campaigns"]+[f"{r['campaign_display_name']} ({r['campaign_code']})"
-                                   for _,r in cdf_g.iterrows()]
-    cids_g=[None]+cdf_g["campaign_sk_id"].tolist()
-    ci_g=st.selectbox("Campaign (optional)",range(len(clabels_g)),
-                       format_func=lambda i:clabels_g[i],key="sel_camp_g")
-    sel_camp=cids_g[ci_g]
+
+sel_camp = None  # campaign filter removed
 
 # apply filters
 sub_df=df_full.copy()
 for t,v in scope_filters:
     sub_df=sub_df[sub_df[SCOPE_COL[t]]==v]
-if sel_camp:
-    sub_df=sub_df[sub_df["campaign_sk_id"]==sel_camp]
 
 scope_key=get_scope_key(scope_filters) if not sel_camp else None
 min_n=5 if scope_filters else 10
 
 # chips
 if scope_filters:
-    lmap={"ou":"OU","category":"Category","brand":"Brand","market":"Market"}
+    lmap={"ou":"OU","category":"Category","brand":"Brand"}
     chips="".join(f'<span class="scope-chip">{lmap[t]}: {v}</span>' for t,v in scope_filters)
-    if sel_camp and sel_camp in camp_map.index:
-        chips+=f'<span class="scope-chip">Campaign: {camp_map.loc[sel_camp,"campaign_display_name"]}</span>'
     st.markdown(f'<div style="margin:.5rem 0 0 0">{chips}</div>',unsafe_allow_html=True)
 else:
-    suf=""
-    if sel_camp and sel_camp in camp_map.index:
-        suf=f' &nbsp;&middot;&nbsp; Campaign: {camp_map.loc[sel_camp,"campaign_display_name"]}'
-    st.markdown(f'<p style="font-size:.74rem;color:#CCC8C2;margin:.4rem 0 0 0">Global scope{suf}</p>',
+    st.markdown('<p style="font-size:.74rem;color:#CCC8C2;margin:.4rem 0 0 0">Global scope</p>',
                 unsafe_allow_html=True)
 
 st.markdown('<hr class="div">', unsafe_allow_html=True)
@@ -583,8 +561,6 @@ if len(sub_df)<3:
 
 scope_label = ("Global" if not scope_filters
                else " · ".join(f"{t.upper()}={v}" for t,v in scope_filters))
-if sel_camp and sel_camp in camp_map.index:
-    scope_label += f" · {camp_map.loc[sel_camp,'campaign_display_name']}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -595,12 +571,12 @@ if page == "01 · Overview & Performance":
     <div class="hero">
       <div class="hero-eyebrow">Overview &amp; Performance</div>
       <div class="hero-title">How is this Selection performing?</div>
-      <div class="hero-sub">A summary of Attention, Persuasion, Likeability and SCD scores
+      <div class="hero-sub">A summary of Attention, Persuasion, Likeability and other scores
         for the assets in this selection, with scope alerts and top performing assets.</div>
     </div>""", unsafe_allow_html=True)
 
-    # KPI cards — row 1: assets + core 4
-    k1,k2,k3,k4,k5 = st.columns(5)
+    # KPI cards — row 1: assets + core 3
+    k1,k2,k3,k4 = st.columns(4)
     with k1:
         st.markdown(f"""<div class="kpi-card">
           <div class="kpi-val">{len(sub_df):,}</div>
@@ -608,8 +584,8 @@ if page == "01 · Overview & Performance":
           <div class="kpi-sub">{sub_df["campaign_sk_id"].nunique():,} campaigns</div>
         </div>""", unsafe_allow_html=True)
     for ml,(mc,col) in zip(
-        ["Attention","Persuasion","Likeability","SCD Score"],
-        [("Attention_T2B",k2),("Persuasion_T2B",k3),("Likeability_Love_Like_T2B",k4),("SCD_score",k5)]
+        ["Attention","Persuasion","Likeability"],
+        [("Attention_T2B",k2),("Persuasion_T2B",k3),("Likeability_Love_Like_T2B",k4)]
     ):
         if mc in sub_df.columns:
             mv=sub_df[mc].dropna().mean()*100
@@ -621,12 +597,13 @@ if page == "01 · Overview & Performance":
                 </div>""", unsafe_allow_html=True)
 
     # KPI cards — row 2: additional metrics
-    n1,n2,n3,n4 = st.columns(4)
+    n1,n2,n3,n4,n5 = st.columns(5)
     for ml,mc,col in [
         ("Experience Recall","Experience_Recall_T2B",n1),
         ("Brand Linkage",    "Brand_Linkage_T2B",    n2),
         ("Uniqueness",       "Uniqueness_T2B",        n3),
         ("Shareability",     "Shareability_T2B",      n4),
+        ("Tiredness",        "Tiredness_T2B",         n5),
     ]:
         if mc in sub_df.columns:
             mv=sub_df[mc].dropna().mean()*100
@@ -649,8 +626,6 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
 
 **Likeability** — did people like the ad — did they love it or like it? (Love + Like combined)
 
-**SCD Score** — a composite score combining all three dimensions: See (awareness/recall, 10%), Connect (likeability/interest, 30%), Do (persuasion/shareability, 60%). Weighted to reflect that conversion is the ultimate goal. Higher is better.
-
 **Uplift** — the difference in average score between ads that have a feature and ads that don't. An uplift of +3pp means ads with that feature score 3 percentage points higher on average.
         """)
 
@@ -670,14 +645,14 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
     unsafe_allow_html=True)
 
     if "top_asset_metric" not in st.session_state:
-        st.session_state.top_asset_metric = "SCD_score"
+        st.session_state.top_asset_metric = "Attention_T2B"
 
     btn_cols = st.columns(4)
     metric_btns = [
-        ("SCD Score",        "SCD_score",                PURPLE),
         ("Attention",        "Attention_T2B",             BLUE),
         ("Persuasion",       "Persuasion_T2B",            RED),
         ("Likeability",      "Likeability_Love_Like_T2B", GREEN),
+        ("Exp. Recall",      "Experience_Recall_T2B",     "#B45309"),
     ]
     for col, (lbl, mc_key, mc_col) in zip(btn_cols, metric_btns):
         with col:
@@ -686,10 +661,10 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
                 st.rerun()
     btn_cols2 = st.columns(4)
     metric_btns2 = [
-        ("Exp. Recall",  "Experience_Recall_T2B", "#B45309"),
-        ("Brand Linkage","Brand_Linkage_T2B",      "#0E7490"),
-        ("Uniqueness",   "Uniqueness_T2B",          "#6D28D9"),
-        ("Shareability", "Shareability_T2B",        "#065F46"),
+        ("Brand Linkage","Brand_Linkage_T2B",  "#0E7490"),
+        ("Uniqueness",   "Uniqueness_T2B",      "#6D28D9"),
+        ("Shareability", "Shareability_T2B",    "#065F46"),
+        ("Tiredness",    "Tiredness_T2B",        "#9F1239"),
     ]
     for col, (lbl, mc_key, mc_col) in zip(btn_cols2, metric_btns2):
         with col:
@@ -709,16 +684,19 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
         att=f"{r.get('Attention_T2B',0)*100:.0f}" if pd.notna(r.get("Attention_T2B")) else "—"
         pers=f"{r.get('Persuasion_T2B',0)*100:.0f}" if pd.notna(r.get("Persuasion_T2B")) else "—"
         like=f"{r.get('Likeability_Love_Like_T2B',0)*100:.0f}" if pd.notna(r.get("Likeability_Love_Like_T2B")) else "—"
-        scd=f"{r.get('SCD_score',0):.2f}" if pd.notna(r.get("SCD_score")) else "—"
         rec=f"{r.get('Experience_Recall_T2B',0)*100:.0f}" if pd.notna(r.get("Experience_Recall_T2B")) else "—"
         lnk=f"{r.get('Brand_Linkage_T2B',0)*100:.0f}" if pd.notna(r.get("Brand_Linkage_T2B")) else "—"
         uniq=f"{r.get('Uniqueness_T2B',0)*100:.0f}" if pd.notna(r.get("Uniqueness_T2B")) else "—"
         shr=f"{r.get('Shareability_T2B',0)*100:.0f}" if pd.notna(r.get("Shareability_T2B")) else "—"
-        # highlight the active sort metric
-        att_s  = f"font-weight:700;color:{BLUE}"  if sort_mc=="Attention_T2B"              else ""
+        trd=f"{r.get('Tiredness_T2B',0)*100:.0f}" if pd.notna(r.get("Tiredness_T2B")) else "—"
+        att_s  = f"font-weight:700;color:{BLUE}"   if sort_mc=="Attention_T2B" else ""
+        trd_s  = f"font-weight:700;color:#9F1239" if sort_mc=="Tiredness_T2B"             else ""
         pers_s = f"font-weight:700;color:{RED}"   if sort_mc=="Persuasion_T2B"             else ""
         like_s = f"font-weight:700;color:{GREEN}" if sort_mc=="Likeability_Love_Like_T2B"  else ""
-        scd_s  = f"font-weight:700;color:{PURPLE}"if sort_mc=="SCD_score"                  else ""
+        rec_s  = f"font-weight:700;color:#B45309" if sort_mc=="Experience_Recall_T2B"      else ""
+        lnk_s  = f"font-weight:700;color:#0E7490" if sort_mc=="Brand_Linkage_T2B"          else ""
+        uniq_s = f"font-weight:700;color:#6D28D9" if sort_mc=="Uniqueness_T2B"             else ""
+        shr_s  = f"font-weight:700;color:#065F46" if sort_mc=="Shareability_T2B"           else ""
         st.markdown(f"""<div class="asset-card">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div class="asset-name">{name}</div>{link}
@@ -729,11 +707,11 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
             <span class="asc asc-a" style="{att_s}">Att {att}pp</span>
             <span class="asc asc-p" style="{pers_s}">Pers {pers}pp</span>
             <span class="asc asc-l" style="{like_s}">Like {like}pp</span>
-            <span class="asc asc-s" style="{scd_s}">SCD {scd}</span>
-            <span class="asc asc-a">Rec {rec}pp</span>
-            <span class="asc asc-a">Link {lnk}pp</span>
-            <span class="asc asc-a">Uniq {uniq}pp</span>
-            <span class="asc asc-a">Share {shr}pp</span>
+            <span class="asc asc-a" style="{rec_s}">Rec {rec}pp</span>
+            <span class="asc asc-a" style="{lnk_s}">Link {lnk}pp</span>
+            <span class="asc asc-a" style="{uniq_s}">Uniq {uniq}pp</span>
+            <span class="asc asc-a" style="{shr_s}">Share {shr}pp</span>
+            <span class="asc asc-a" style="{trd_s}">Tired {trd}pp</span>
           </div>
         </div>""", unsafe_allow_html=True)
 
@@ -757,8 +735,22 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
             av_url  = av_row.get("asset_url", "")
             av_link = f'<a href="{av_url}" target="_blank" style="display:inline-block;margin-top:.6rem;background:{RED};color:#fff;padding:.35rem .9rem;border-radius:4px;font-size:.82rem;font-weight:600;text-decoration:none">▶ View asset</a>' if av_url else ""
             av_feats_bin = [FEAT_LABEL.get(f,f) for f in BIN_FEATS if av_row.get(f)==1]
-            av_feats_cat = {FEAT_LABEL.get(f,f): av_row.get(f) for f in CAT_FEATS
-                            if pd.notna(av_row.get(f)) and str(av_row.get(f)).strip() not in ("","nan")}
+            # Extended features: cat_feats + rich context columns
+            EXTENDED_FEAT_COLS = list(CAT_FEATS) + [
+                "occasions","passion_point","moments","music_style","seasonal",
+                "emotions","food","products","intrinsic_elements",
+                "additional_elements_and_product_placement",
+                "most_frequently_used_word_in_creative",
+            ]
+            seen = set()
+            av_feats_ext = {}
+            for f in EXTENDED_FEAT_COLS:
+                if f in seen: continue
+                seen.add(f)
+                val = av_row.get(f)
+                if pd.notna(val) and str(val).strip() not in ("","nan"):
+                    label = FEAT_LABEL.get(f, f.replace("_"," ").title())
+                    av_feats_ext[label] = str(val)
 
             st.markdown(f"""<div style="background:#fff;border:1px solid #EAE8E2;border-radius:6px;padding:1.2rem 1.4rem;">
               <div style="font-size:.95rem;font-weight:600;color:#1C1C1C;margin-bottom:.3rem">{av_sel}</div>
@@ -774,8 +766,8 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
                 </div>
               </div>
               <div style="margin-top:.9rem">
-                <div style="font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#6A6660;margin-bottom:.4rem">Categorical features</div>
-                {"".join(f'<div style="display:flex;gap:.5rem;padding:.22rem 0;border-bottom:1px solid #F5F3EF"><span style="font-size:.78rem;color:#888;width:130px;flex-shrink:0">{k}</span><span style="font-size:.82rem;color:#1C1C1C;font-weight:500">{v}</span></div>' for k,v in av_feats_cat.items()) if av_feats_cat else '<div style="font-size:.83rem;color:#AAA">No categorical features</div>'}
+                <div style="font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#6A6660;margin-bottom:.4rem">All features</div>
+                {"".join(f'<div style="display:flex;gap:.5rem;padding:.22rem 0;border-bottom:1px solid #F5F3EF"><span style="font-size:.78rem;color:#888;width:150px;flex-shrink:0">{k}</span><span style="font-size:.82rem;color:#1C1C1C;font-weight:500">{v}</span></div>' for k,v in av_feats_ext.items()) if av_feats_ext else '<div style="font-size:.83rem;color:#AAA">No feature data</div>'}
               </div>
             </div>""", unsafe_allow_html=True)
 
@@ -786,19 +778,18 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
                 ("Attention",        "Attention_T2B",             BLUE),
                 ("Persuasion",       "Persuasion_T2B",            RED),
                 ("Likeability",      "Likeability_Love_Like_T2B", GREEN),
-                ("SCD Score",        "SCD_score",                 PURPLE),
                 ("Experience Recall","Experience_Recall_T2B",     "#B45309"),
                 ("Brand Linkage",    "Brand_Linkage_T2B",         "#0E7490"),
                 ("Uniqueness",       "Uniqueness_T2B",             "#6D28D9"),
                 ("Shareability",     "Shareability_T2B",           "#065F46"),
+                ("Tiredness",        "Tiredness_T2B",              "#9F1239"),
             ]:
                 val = av_row.get(mc_key)
                 if pd.notna(val):
-                    disp = f"{val*100:.1f}pp" if mc_key != "SCD_score" else f"{val:.3f}"
-                    # compare to scope mean
+                    disp = f"{val*100:.1f}pp"
                     scope_mean = sub_df[mc_key].dropna().mean()
                     diff = val - scope_mean
-                    diff_disp = f"{diff*100:+.1f}pp vs scope" if mc_key != "SCD_score" else f"{diff:+.3f} vs scope"
+                    diff_disp = f"{diff*100:+.1f}pp vs scope"
                     diff_col = GREEN if diff > 0 else (RED if diff < 0 else "#AAA")
                     st.markdown(f"""<div style="display:flex;align-items:center;gap:.8rem;padding:.5rem 0;border-bottom:1px solid #F5F3EF">
                       <div style="width:8px;height:8px;border-radius:50%;background:{mc_col};flex-shrink:0"></div>
@@ -827,13 +818,14 @@ elif page == "02 · Feature Impact":
     </div>""", unsafe_allow_html=True)
 
     mc_sel=st.selectbox("Metric to display",
-                         ["SCD Score","Attention","Persuasion","Likeability",
-                          "Experience Recall","Brand Linkage","Uniqueness","Shareability"],
+                         ["Attention","Persuasion","Likeability",
+                          "Experience Recall","Brand Linkage","Uniqueness","Shareability","Tiredness"],
                          key="fi_mc")
-    mc_map={"SCD Score":"SCD_score","Attention":"Attention_T2B",
+    mc_map={"Attention":"Attention_T2B",
             "Persuasion":"Persuasion_T2B","Likeability":"Likeability_Love_Like_T2B",
             "Experience Recall":"Experience_Recall_T2B","Brand Linkage":"Brand_Linkage_T2B",
-            "Uniqueness":"Uniqueness_T2B","Shareability":"Shareability_T2B"}
+            "Uniqueness":"Uniqueness_T2B","Shareability":"Shareability_T2B",
+            "Tiredness":"Tiredness_T2B"}
     mc=mc_map[mc_sel]
 
     col_chart, col_alerts = st.columns([1.6,1])
@@ -948,12 +940,10 @@ elif page == "03 · Combination Explorer":
     <strong>How the best combination works:</strong> The algorithm starts with the baseline
     (mean score of all assets in scope) and greedily adds one feature at a time — always
     choosing the next feature that adds the most uplift given what's already selected.
-    The <strong>Gain</strong> column shows each feature's individual contribution.
-    <strong>Total</strong> is the cumulative uplift from baseline.
-    <strong>n</strong> is how many assets match all selected features at that step —
-    smaller n means the estimate is less certain.
-    <strong>pp</strong> = percentage points (e.g. +8pp on Attention means 8 more percentage
-    points of respondents said they noticed the ad).
+    The top <strong>3 features</strong> are shown for each metric. The <strong>Gain</strong>
+    column shows each feature's individual contribution. <strong>Total</strong> is the cumulative
+    uplift from baseline. <strong>n</strong> is how many assets match all selected features —
+    smaller n means the estimate is less certain. <strong>pp</strong> = percentage points.
     </div>""", unsafe_allow_html=True)
 
     # scope alerts
@@ -962,101 +952,131 @@ elif page == "03 · Combination Explorer":
         with st.expander(f"⚠ {len(alerts)} scope alert{'s' if len(alerts)>1 else ''}",expanded=False):
             render_alerts(alerts)
 
-    tab_a,tab_p,tab_l = st.tabs(["Attention","Persuasion","Likeability"])
-    for mc,tab in zip(["Attention_T2B","Persuasion_T2B","Likeability_Love_Like_T2B"],[tab_a,tab_p,tab_l]):
+    ALL_COMBO_METRICS = [
+        ("Attention",        "Attention_T2B"),
+        ("Persuasion",       "Persuasion_T2B"),
+        ("Likeability",      "Likeability_Love_Like_T2B"),
+        ("Exp. Recall",      "Experience_Recall_T2B"),
+        ("Brand Linkage",    "Brand_Linkage_T2B"),
+        ("Uniqueness",       "Uniqueness_T2B"),
+        ("Shareability",     "Shareability_T2B"),
+        ("Tiredness",        "Tiredness_T2B"),
+    ]
+    tab_labels = [m[0] for m in ALL_COMBO_METRICS]
+    tabs = st.tabs(tab_labels)
+    for (ml, mc), tab in zip(ALL_COMBO_METRICS, tabs):
         with tab:
-            ml=METRICS.get(mc,mc)
-            combo,steps,baseline_pp,n_total=get_combo(sub_df,scope_key,mc,min_n)
+            # Get top3 from precomputed if available, else fall back to single best
+            top3 = []
+            if scope_key and scope_key in results and mc in results[scope_key]:
+                c = results[scope_key][mc]
+                top3 = c.get("top3_combos", [])
+                if not top3:
+                    # Backward compat: wrap single combo as rank-1
+                    if c.get("steps"):
+                        top3 = [{"rank":1,"combo":c["combo"],"steps":c["steps"],
+                                  "baseline_pp":c["baseline_pp"],"n_total":c["n_total"]}]
 
-            if not steps:
+            if not top3:
                 st.markdown('<p style="color:#CCC8C2;padding:1.5rem 0;font-size:.84rem">No combination found for this scope.</p>',
                             unsafe_allow_html=True)
                 continue
 
-            final_mean=steps[-1]["metric_mean"]
-            total_uplift=steps[-1]["cumulative_uplift_pp"]
-            final_n=steps[-1]["n"]
+            baseline_pp = top3[0]["baseline_pp"]
+            n_total     = top3[0]["n_total"]
 
-            col_wf,col_right=st.columns([1.5,1])
-            with col_wf:
-                # combo summary card
-                st.markdown(f"""
-                <div class="combo-card">
-                  <div style="display:flex;align-items:flex-end;gap:.9rem;margin-bottom:.25rem">
-                    <span class="combo-uplift">+{total_uplift:.1f}</span>
-                    <span style="font-family:'Merriweather',serif;font-size:1.3rem;color:#D0C8C0;font-weight:300">pp</span>
-                    <div style="padding-bottom:.22rem">
-                      <div style="font-size:.74rem;color:#AAA89E">cumulative uplift on {ml}</div>
-                      <div style="font-size:.68rem;color:#CCC8C2;margin-top:.08rem">
-                        Baseline {baseline_pp:.1f}pp &rarr; {final_mean:.1f}pp &nbsp;&middot;&nbsp;
-                        {len(steps)} features &nbsp;&middot;&nbsp; n={final_n:,}
-                      </div>
-                    </div>
-                  </div>""", unsafe_allow_html=True)
-                pills='<div class="pill-row">'
-                for s in steps:
-                    pills+=(f'<div class="pill"><span class="pill-n">{s["step"]}</span>'
-                            f'{s["label"]}<span class="pill-gain">+{s["step_gain_pp"]:.1f}pp</span></div>')
-                st.markdown(pills+"</div></div>",unsafe_allow_html=True)
-                if final_n<10:
-                    st.markdown(f'<div class="low-n">Only {final_n} assets match — treat as directional.</div>',
-                                unsafe_allow_html=True)
+            for rank_data in top3:
+                steps     = rank_data["steps"]
+                combo     = rank_data["combo"]
+                rank      = rank_data["rank"]
+                if not steps:
+                    continue
+                final_mean   = steps[-1]["metric_mean"]
+                total_uplift = steps[-1]["cumulative_uplift_pp"]
+                final_n      = steps[-1]["n"]
 
-                # waterfall
-                st.markdown('<div style="margin-top:1.4rem"></div>',unsafe_allow_html=True)
-                st.markdown(f"""
-                <div class="wf-row" style="border-bottom:1px solid #EAE8E2;padding-bottom:.2rem">
-                  <div class="wf-idx"></div><div class="wf-label wf-col">Feature</div>
-                  <div class="wf-bar wf-col">Gain vs previous step</div>
-                  <div class="wf-n wf-col">n</div><div class="wf-pp wf-col">Total</div>
-                </div>
-                <div class="wf-row">
-                  <div class="wf-idx">—</div>
-                  <div class="wf-label" style="color:#CCC8C2;font-style:italic">Baseline — {n_total:,} assets in scope ({baseline_pp:.1f}pp)</div>
-                  <div class="wf-bar">{bar_html(0)}</div>
-                  <div class="wf-n">{n_total:,}</div>
-                  <div class="wf-pp" style="color:#CCC8C2">{baseline_pp:.1f}</div>
-                </div>""",unsafe_allow_html=True)
-                mx=max(s["step_gain_pp"] for s in steps) if steps else 1
-                for s in steps:
-                    frac=s["step_gain_pp"]/mx if mx>0 else 0
+                # ── Combination {rank} ───────────────────────────────────────────
+                st.markdown(f'<div style="font-size:.78rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#6A6660;margin:1.2rem 0 .4rem 0">Combination {rank} of 3</div>', unsafe_allow_html=True)
+                col_wf,col_right=st.columns([1.5,1])
+                with col_wf:
+                    # combo summary card
                     st.markdown(f"""
-                    <div class="wf-row">
-                      <div class="wf-idx" style="color:#E8002D;font-weight:600">{s["step"]}</div>
-                      <div class="wf-label">+ {s["label"]}</div>
-                      <div class="wf-bar">{bar_html(frac)}</div>
-                      <div class="wf-n">{s["n"]:,}</div>
-                      <div class="wf-pp">+{s["cumulative_uplift_pp"]:.1f}</div>
-                    </div>""",unsafe_allow_html=True)
-
-            with col_right:
-                # alerts for top combo feature
-                if steps:
-                    top_f=steps[0]["feat"]
-                    st.markdown(f'<div class="sec-label">Alerts — {FEAT_LABEL.get(top_f,top_f)}</div>',
-                                unsafe_allow_html=True)
-                    fit=get_feature_alerts(top_f,scope_filters,mc)
-                    if fit: render_alerts(fit,max_items=5)
-                    else: st.markdown('<p style="color:#AAA;font-size:.81rem">No alerts for this feature.</p>',unsafe_allow_html=True)
-
-                # SCD asset sample
-                st.markdown('<div style="margin-top:1rem"></div>',unsafe_allow_html=True)
-                st.markdown('<div class="sec-label">Top assets matching this combination</div>',unsafe_allow_html=True)
-                if combo:
-                    sel_tmp=default_sel(combo)
-                    mask_tmp=apply_sel(sub_df,sel_tmp)
-                    top_tmp=sub_df.loc[mask_tmp].sort_values("SCD_score",ascending=False).head(4)
-                    for _,r in top_tmp.iterrows():
-                        url=r.get("asset_url",""); nm=r.get("asset_name",f"Asset {r.get('asset_sk_id','')}")
-                        lnk=f'<a href="{url}" target="_blank" style="color:{RED};font-size:.71rem;font-weight:600;text-decoration:none">▶ View</a>' if url else ""
-                        scd=f"{r['SCD_score']:.2f}" if pd.notna(r.get("SCD_score")) else "—"
-                        st.markdown(f"""<div class="asset-card">
-                          <div style="display:flex;justify-content:space-between">
-                            <div class="asset-name" style="font-size:.76rem">{nm[:50]}</div>{lnk}
+                    <div class="combo-card">
+                      <div style="display:flex;align-items:flex-end;gap:.9rem;margin-bottom:.25rem">
+                        <span class="combo-uplift">+{total_uplift:.1f}</span>
+                        <span style="font-family:'Merriweather',serif;font-size:1.3rem;color:#D0C8C0;font-weight:300">pp</span>
+                        <div style="padding-bottom:.22rem">
+                          <div style="font-size:.74rem;color:#AAA89E">cumulative uplift on {ml}</div>
+                          <div style="font-size:.68rem;color:#CCC8C2;margin-top:.08rem">
+                            Baseline {baseline_pp:.1f}pp &rarr; {final_mean:.1f}pp &nbsp;&middot;&nbsp;
+                            {len(steps)} features &nbsp;&middot;&nbsp; n={final_n:,}
                           </div>
-                          <div class="asset-meta">SCD {scd} &nbsp;·&nbsp; {r.get("country_name","")}</div>
+                        </div>
+                      </div>""", unsafe_allow_html=True)
+                    pills='<div class="pill-row">'
+                    for s in steps:
+                        pills+=(f'<div class="pill"><span class="pill-n">{s["step"]}</span>'
+                                f'{s["label"]}<span class="pill-gain">+{s["step_gain_pp"]:.1f}pp</span></div>')
+                    st.markdown(pills+"</div></div>",unsafe_allow_html=True)
+                    if final_n<10:
+                        st.markdown(f'<div class="low-n">Only {final_n} assets match — treat as directional.</div>',
+                                    unsafe_allow_html=True)
+    
+                    # waterfall
+                    st.markdown('<div style="margin-top:1.4rem"></div>',unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class="wf-row" style="border-bottom:1px solid #EAE8E2;padding-bottom:.2rem">
+                      <div class="wf-idx"></div><div class="wf-label wf-col">Feature</div>
+                      <div class="wf-bar wf-col">Gain vs previous step</div>
+                      <div class="wf-n wf-col">n</div><div class="wf-pp wf-col">Total</div>
+                    </div>
+                    <div class="wf-row">
+                      <div class="wf-idx">—</div>
+                      <div class="wf-label" style="color:#CCC8C2;font-style:italic">Baseline — {n_total:,} assets in scope ({baseline_pp:.1f}pp)</div>
+                      <div class="wf-bar">{bar_html(0)}</div>
+                      <div class="wf-n">{n_total:,}</div>
+                      <div class="wf-pp" style="color:#CCC8C2">{baseline_pp:.1f}</div>
+                    </div>""",unsafe_allow_html=True)
+                    mx=max(s["step_gain_pp"] for s in steps) if steps else 1
+                    for s in steps:
+                        frac=s["step_gain_pp"]/mx if mx>0 else 0
+                        st.markdown(f"""
+                        <div class="wf-row">
+                          <div class="wf-idx" style="color:#E8002D;font-weight:600">{s["step"]}</div>
+                          <div class="wf-label">+ {s["label"]}</div>
+                          <div class="wf-bar">{bar_html(frac)}</div>
+                          <div class="wf-n">{s["n"]:,}</div>
+                          <div class="wf-pp">+{s["cumulative_uplift_pp"]:.1f}</div>
                         </div>""",unsafe_allow_html=True)
-
+    
+                with col_right:
+                    # alerts for top combo feature
+                    if steps:
+                        top_f=steps[0]["feat"]
+                        st.markdown(f'<div class="sec-label">Alerts — {FEAT_LABEL.get(top_f,top_f)}</div>',
+                                    unsafe_allow_html=True)
+                        fit=get_feature_alerts(top_f,scope_filters,mc)
+                        if fit: render_alerts(fit,max_items=5)
+                        else: st.markdown('<p style="color:#AAA;font-size:.81rem">No alerts for this feature.</p>',unsafe_allow_html=True)
+    
+                    # Top assets matching combination
+                    st.markdown('<div style="margin-top:1rem"></div>',unsafe_allow_html=True)
+                    st.markdown('<div class="sec-label">Top assets matching this combination</div>',unsafe_allow_html=True)
+                    if combo:
+                        sel_tmp=default_sel(combo)
+                        mask_tmp=apply_sel(sub_df,sel_tmp)
+                        top_tmp=sub_df.loc[mask_tmp].sort_values("Attention_T2B",ascending=False).head(4)
+                        for _,r in top_tmp.iterrows():
+                            url=r.get("asset_url",""); nm=r.get("asset_name",f"Asset {r.get('asset_sk_id','')}")
+                            lnk=f'<a href="{url}" target="_blank" style="color:{RED};font-size:.71rem;font-weight:600;text-decoration:none">▶ View</a>' if url else ""
+                            att=f"{r['Attention_T2B']*100:.0f}pp" if pd.notna(r.get("Attention_T2B")) else "—"
+                            st.markdown(f"""<div class="asset-card">
+                              <div style="display:flex;justify-content:space-between">
+                                <div class="asset-name" style="font-size:.76rem">{nm[:50]}</div>{lnk}
+                              </div>
+                              <div class="asset-meta">Att {att} &nbsp;·&nbsp; {r.get("country_name","")}</div>
+                            </div>""",unsafe_allow_html=True)
+    
             # ── Feature Explorer ─────────────────────────────────────────────
             st.markdown("""<div class="explorer-card">
               <div class="explorer-title">Explore any combination</div>
@@ -1160,12 +1180,13 @@ elif page == "04 · Feature Combinations & OU Impact":
                      format_func=lambda i:feat_labels[i],key="combo_feat")
     sel_f=feat_cols[fi]; sel_fl=feat_labels[fi]
 
-    mc_c=st.selectbox("Metric",["SCD Score","Attention","Persuasion","Likeability",
-                                 "Experience Recall","Brand Linkage","Uniqueness","Shareability"],key="combo_mc")
-    mc_c_col={"SCD Score":"SCD_score","Attention":"Attention_T2B",
+    mc_c=st.selectbox("Metric",["Attention","Persuasion","Likeability",
+                                 "Experience Recall","Brand Linkage","Uniqueness","Shareability","Tiredness"],key="combo_mc")
+    mc_c_col={"Attention":"Attention_T2B",
                "Persuasion":"Persuasion_T2B","Likeability":"Likeability_Love_Like_T2B",
                "Experience Recall":"Experience_Recall_T2B","Brand Linkage":"Brand_Linkage_T2B",
-               "Uniqueness":"Uniqueness_T2B","Shareability":"Shareability_T2B"}[mc_c]
+               "Uniqueness":"Uniqueness_T2B","Shareability":"Shareability_T2B",
+               "Tiredness":"Tiredness_T2B"}[mc_c]
 
     # Solo uplift
     u_s,sig_s,n_s=compute_uplift(sub_df,sel_f,mc_c_col)
@@ -1271,7 +1292,7 @@ elif page == "04 · Feature Combinations & OU Impact":
             st.markdown(f'<div class="sec-label">Best combination per OU — {sel_fl} + top partner</div>',
                         unsafe_allow_html=True)
             st.markdown("""<div class="explain-box" style="font-size:.78rem">
-            For each OU, the best partner feature to combine with the selected feature on SCD Score.</div>""",
+            For each OU, the best partner feature to combine with the selected feature on Attention.</div>""",
             unsafe_allow_html=True)
             ou_combo_rows=[]
             for ou in sorted(df_full["operating_unit_code"].dropna().unique()):
@@ -1279,10 +1300,10 @@ elif page == "04 · Feature Combinations & OU Impact":
                 if scope_filters:
                     for t,v in scope_filters:
                         if t!="ou": ou_sub2=ou_sub2[ou_sub2[SCOPE_COL[t]]==v]
-                cc=feature_combinations(ou_sub2,sel_f,"SCD_score",top_n=1)
+                cc=feature_combinations(ou_sub2,sel_f,"Attention_T2B",top_n=1)
                 if cc:
                     ou_combo_rows.append({"OU":ou,"Partner":cc[0]["label"],
-                                          "Combined SCD":f'+{cc[0]["combined"]:.1f}pp',
+                                          "Combined Uplift":f'+{cc[0]["combined"]:.1f}pp',
                                           "Synergy":f'+{cc[0]["synergy"]:.1f}pp' if cc[0]["synergy"]>=0
                                                     else f'{cc[0]["synergy"]:.1f}pp',
                                           "n":cc[0]["n"]})
@@ -1324,18 +1345,18 @@ elif page == "05 · Insight Catalog":
 **Quality flags** — small_sample (fewer than 30 assets on one side), multiple_testing_risk (many features tested at once), low_value_presence (very few assets have this feature).
         """)
 
-    # Filters
+    # Filters — Scope limited to Brand and OU only
     cf1,cf2,cf3,cf4,cf5 = st.columns(5)
     with cf1:
-        smap={"ou":"OU","category":"Category","brand":"Brand","market":"Market"}
         default_scope="All"
         if scope_filters:
-            sl=smap.get(scope_filters[0][0],""); sv=scope_filters[0][1]
-            default_scope=f"{sl}: {sv}"
+            smap2={"ou":"OU","brand":"Brand"}
+            sl=smap2.get(scope_filters[0][0],""); sv=scope_filters[0][1]
+            if sl: default_scope=f"{sl}: {sv}"
         scope_opts=["All"]+sorted(
             [f"{r['filter']}: {r['filter_value']}" for _,r in
              catalog[["filter","filter_value"]].drop_duplicates().iterrows()
-             if r["filter"]!="Global"])
+             if r["filter"] in ("OU","Brand")])
         cat_scope=st.selectbox("Scope",scope_opts,
                                 index=scope_opts.index(default_scope) if default_scope in scope_opts else 0)
     with cf2:
@@ -1363,10 +1384,89 @@ elif page == "05 · Insight Catalog":
         fc=fc.sort_values(["_co","evidence_uplift_pp"],ascending=[True,False])
     elif cat_sort=="Feature": fc=fc.sort_values("feature_display")
 
-    vmode=st.radio("View",["Cards","Table"])
     st.markdown(f"<span style='color:{MID};font-size:.83rem'>{len(fc):,} insights</span>",unsafe_allow_html=True)
 
-    if vmode=="Cards":
+    # ── Asset Feature Panel ───────────────────────────────────────────────────
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">Asset features &amp; their values in this scope</div>', unsafe_allow_html=True)
+    st.markdown("""<div class="explain-box">
+    All feature columns and the values they take across assets in the current scope.
+    Binary features show how many assets have the feature. Categorical features list every value and asset count.</div>""",
+    unsafe_allow_html=True)
+
+    af_col1, af_col2 = st.columns(2)
+    BIN_LABEL_05 = {
+        "animals_and_pets_presence":"Animals & Pets","animatics_cartoons_presence":"Animatics / Cartoons",
+        "food_presence":"Food","human_presence":"Human","outdoors":"Outdoors",
+        "indoors":"Indoors","product_presence":"Product",
+    }
+    CAT_LABEL_05 = {
+        "color_contrast_cat":"Color Contrast","text_color_contrast_cat":"Text Contrast",
+        "color_spectrum":"Color Spectrum","tone":"Tone","design_style":"Design Style",
+        "occasions":"Occasions","passion_point":"Passion Point","moments":"Moments",
+        "music_style":"Music Style","seasonal":"Seasonal",
+    }
+    with af_col1:
+        st.markdown('<div style="font-size:.72rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#6A6660;margin-bottom:.6rem">Binary features</div>', unsafe_allow_html=True)
+        for col_f, lbl_f in BIN_LABEL_05.items():
+            if col_f not in sub_df.columns: continue
+            n_yes = int((sub_df[col_f]==1).sum())
+            n_no  = int((sub_df[col_f]==0).sum())
+            n_tot = n_yes + n_no
+            pct   = int(n_yes/n_tot*100) if n_tot>0 else 0
+            bar_w = max(2, pct)
+            st.markdown(
+                f'<div style="padding:.35rem 0;border-bottom:1px solid #F5F3EF">'
+                f'<div style="display:flex;justify-content:space-between;margin-bottom:.25rem">'
+                f'<span style="font-size:.83rem;font-weight:600;color:#1C1C1C">{lbl_f}</span>'
+                f'<span style="font-size:.78rem;color:#888">{n_yes:,} Yes · {n_no:,} No</span>'
+                f'</div>'
+                f'<div style="background:#F0EDE8;border-radius:3px;height:5px">'
+                f'<div style="width:{bar_w}%;height:5px;background:{RED};border-radius:3px"></div></div>'
+                f'<div style="font-size:.72rem;color:#AAA;margin-top:.15rem">{pct}% of assets have this feature</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+    with af_col2:
+        st.markdown('<div style="font-size:.72rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#6A6660;margin-bottom:.6rem">Categorical features</div>', unsafe_allow_html=True)
+        for col_f, lbl_f in CAT_LABEL_05.items():
+            if col_f not in sub_df.columns: continue
+            vc = sub_df[col_f].dropna()
+            vc = vc[vc.astype(str).str.strip()!=""]
+            if vc.empty: continue
+            counts = vc.value_counts().head(6)
+            values_html = "".join(
+                f'<span style="display:inline-block;background:#F5F3EF;border-radius:3px;'
+                f'padding:.15rem .5rem;margin:.1rem .2rem .1rem 0;font-size:.75rem;color:#3A3830">'
+                f'{str(v)[:30]} <span style="color:#AAA">({c:,})</span></span>'
+                for v,c in counts.items()
+            )
+            more2 = len(vc.value_counts()) - 6
+            if more2 > 0:
+                values_html += f'<span style="font-size:.73rem;color:#AAA;margin-left:.2rem">+{more2} more</span>'
+            st.markdown(
+                f'<div style="padding:.35rem 0;border-bottom:1px solid #F5F3EF;margin-bottom:.1rem">'
+                f'<div style="font-size:.83rem;font-weight:600;color:#1C1C1C;margin-bottom:.3rem">{lbl_f}</div>'
+                f'{values_html}</div>',
+                unsafe_allow_html=True
+            )
+
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+
+    # ── View toggle — Table default ───────────────────────────────────────────
+    vmode=st.radio("View",["Table","Cards"])
+
+    if vmode=="Table":
+        sc2=["feature_display","metric_display","filter","filter_value",
+             "evidence_uplift_pp","evidence_sig","confidence","effect_size",
+             "evidence_n_has","evidence_baseline_pp","quality_flags"]
+        st.dataframe(fc[[c for c in sc2 if c in fc.columns]].rename(columns={
+            "feature_display":"Feature","metric_display":"Metric","filter":"Scope",
+            "filter_value":"Scope value","evidence_uplift_pp":"Uplift (pp)",
+            "evidence_sig":"Sig.","confidence":"Confidence","effect_size":"Effect size",
+            "evidence_n_has":"n (has)","evidence_baseline_pp":"Baseline (pp)",
+            "quality_flags":"Flags"}).reset_index(drop=True),height=600)
+    else:
         pg=max(1,int(np.ceil(len(fc)/20)))
         pnum=st.slider("Page",1,pg,1) if pg>1 else 1
         for _,r in fc.iloc[(pnum-1)*20:pnum*20].iterrows():
@@ -1374,29 +1474,26 @@ elif page == "05 · Insight Catalog":
             flags=""
             if r.get("quality_flags",""):
                 flags="".join(badge(x.strip(),"b-ns") for x in str(r["quality_flags"]).split(",") if x.strip())
-
-            # OU impact snippet for this feature
             ou_snippet=""
             if has_ins and rulebook is not None:
                 ou_het=rulebook[(rulebook["feature"]==r["feature"]) &
                                 (rulebook["rule_type"]=="Heterogeneity") &
                                 (rulebook["severity"]=="high")]
                 if not ou_het.empty:
-                    ou_snippet=f'<div style="margin-top:5px;font-size:.76rem;color:#906820">⚠ Reversal in some OUs — check Rulebook before briefing</div>'
-
-            # best combo snippet
+                    ou_snippet='<div style="margin-top:5px;font-size:.76rem;color:#906820">⚠ Reversal in some OUs — check Rulebook before briefing</div>'
             cb=feature_combinations(sub_df,r["feature"],
                                      {"Attention":"Attention_T2B","Persuasion":"Persuasion_T2B",
-                                      "Likeability":"Likeability_Love_Like_T2B","SCD Score":"SCD_score",
-                                      "Experience Recall":"Experience_Recall_T2B","Brand Linkage":"Brand_Linkage_T2B",
-                                      "Uniqueness":"Uniqueness_T2B","Shareability":"Shareability_T2B"}.get(r["metric_display"],"SCD_score"),
+                                      "Likeability":"Likeability_Love_Like_T2B",
+                                      "Experience Recall":"Experience_Recall_T2B",
+                                      "Brand Linkage":"Brand_Linkage_T2B",
+                                      "Uniqueness":"Uniqueness_T2B","Shareability":"Shareability_T2B",
+                                      "Tiredness":"Tiredness_T2B"}.get(r["metric_display"],"Attention_T2B"),
                                      top_n=1)
             combo_snippet=""
             if cb:
                 combo_snippet=(f'<div style="margin-top:5px;font-size:.76rem;color:#555">'
                                f'Best combination: <strong>{cb[0]["label"]}</strong> → '
                                f'{cb[0]["combined"]:+.1f}pp combined (synergy {cb[0]["synergy"]:+.1f}pp)</div>')
-
             st.markdown(f"""<div class="insight-card" style="border-left-color:{bc}">
               <div style="display:flex;justify-content:space-between">
                 <div class="ic-feat">{r["feature_display"]}</div>
@@ -1410,20 +1507,10 @@ elif page == "05 · Insight Catalog":
                 {sig_badge(r["evidence_sig"])}
                 <span class="badge b-scope">n={int(r["evidence_n_has"]):,}</span>
                 <span class="badge b-ns">base {r["evidence_baseline_pp"]:.1f}pp</span>
-                {badge(r.get("filter","")+" "+r.get("filter_value",""),"b-scope")}
+                {badge(r.get("filter","")+": "+r.get("filter_value",""),"b-scope")}
                 {flags}
               </div>
             </div>""",unsafe_allow_html=True)
-    else:
-        sc2=["feature_display","metric_display","filter","filter_value",
-             "evidence_uplift_pp","evidence_sig","confidence","effect_size",
-             "evidence_n_has","evidence_baseline_pp","quality_flags"]
-        st.dataframe(fc[[c for c in sc2 if c in fc.columns]].rename(columns={
-            "feature_display":"Feature","metric_display":"Metric","filter":"Scope",
-            "filter_value":"Scope value","evidence_uplift_pp":"Uplift (pp)",
-            "evidence_sig":"Sig.","confidence":"Confidence","effect_size":"Effect size",
-            "evidence_n_has":"n (has)","evidence_baseline_pp":"Baseline (pp)",
-            "quality_flags":"Flags"}),height=600,)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

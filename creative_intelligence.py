@@ -176,6 +176,22 @@ hr.div{border:none;border-top:1px solid #EAE8E2;margin:1.8rem 0;}
 .stTabs [aria-selected="true"]{background:transparent!important;color:#1C1C1C!important;border-bottom:2px solid #E8002D!important;font-weight:600!important;}
 .stSelectbox label{font-size:.8rem!important;color:#AAA89E!important;font-weight:400!important;letter-spacing:.05em!important;text-transform:uppercase!important;}
 .stSelectbox>div>div{background:#FAFAF8!important;border:1px solid #E4E0DA!important;border-radius:4px!important;color:#1C1C1C!important;font-size:.9rem!important;}
+
+.page-card{background:#fff;border:1px solid #EAE8E2;border-radius:8px;padding:1.3rem 1.5rem;margin-bottom:.8rem;display:flex;gap:1.2rem;align-items:flex-start;}
+.page-card-icon{font-size:1.6rem;line-height:1;flex-shrink:0;margin-top:.1rem;}
+.page-card-body{flex:1;}
+.page-card-title{font-size:.92rem;font-weight:700;color:#1C1C1C;margin-bottom:.25rem;}
+.page-card-phase{display:inline-block;font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:.15rem .55rem;border-radius:20px;margin-bottom:.45rem;}
+.phase-what{background:#EBF3FB;color:#2D5BE3;}
+.phase-why{background:#EAFAF1;color:#2A8050;}
+.phase-sowhat{background:#F3EEFF;color:#7030A0;}
+.page-card-desc{font-size:.83rem;color:#555;line-height:1.65;}
+.page-card-tip{font-size:.77rem;color:#888;margin-top:.5rem;border-top:1px solid #F5F3EF;padding-top:.45rem;}
+
+.metric-ref-row{display:flex;align-items:flex-start;gap:.7rem;padding:.55rem 0;border-bottom:1px solid #F5F3EF;}
+.metric-ref-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:.25rem;}
+.metric-ref-name{font-size:.85rem;font-weight:600;color:#1C1C1C;width:160px;flex-shrink:0;}
+.metric-ref-desc{font-size:.82rem;color:#555;line-height:1.5;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -239,6 +255,31 @@ ALL_FEATS    = [
     "color_contrast_cat","text_color_contrast_cat","color_spectrum",
     "occasions","passion_point","moments","music_style","seasonal",
 ]
+FEAT_DESC = {
+    "animals_and_pets_presence":  "Animals or pets in the ad create warmth and emotional connection, though they can distract from the brand.",
+    "animatics_cartoons_presence":"Animated or cartoon-style creative allows flexibility and stands out in feed, but may reduce realism.",
+    "food_presence":              "Food or drink visibly featured. Activates appetite and occasion-based associations.",
+    "human_presence":             "A person appears in the ad. Creates relatability and emotional resonance with viewers.",
+    "outdoors":                   "Ad is set in an outdoor environment. Conveys freedom, lifestyle, and occasion fit.",
+    "indoors":                    "Ad is set indoors. Conveys comfort and occasion context (meals, socialising at home).",
+    "product_presence":           "The Coca-Cola product is visible. Directly drives brand linkage and aided recall.",
+    "color_contrast_cat":         "Level of color contrast in the ad. Higher contrast drives attention but must balance with brand aesthetics.",
+    "text_color_contrast_cat":    "Legibility of on-screen text. Poor contrast reduces comprehension and key message effectiveness.",
+    "color_spectrum":             "Dominant colour palette direction (warm vs cool). Warm = energy/joy; cool = refreshment.",
+    "tone":                       "Emotional tone of the ad (friendly, inspiring, humorous…). Alignment with brand values drives connection.",
+    "design_style":               "Overall visual style (photographic, illustrated, typographic…). Affects perceived quality and brand fit.",
+    "occasions":                  "Consumption occasion targeted (Meals, Festive, Sport…). Occasion relevance drives purchase intent.",
+    "passion_point":              "Consumer interest or lifestyle passion connected to (Music, Sport, Food…). Drives engagement and shareability.",
+    "moments":                    "Specific social moment depicted. Moment relevance drives emotional connection.",
+    "music_style":                "Genre of music used. Affects mood, attention, and cultural resonance.",
+    "seasonal":                   "Tied to a season or holiday. Boosts short-term relevance but limits asset longevity.",
+    "emotions":                   "Emotions detected in the creative. Emotional congruence with the audience drives likeability and recall.",
+    "food":                       "Specific food items depicted. Provides context for occasion and appetite-driven targeting.",
+    "products":                   "Coca-Cola product variants shown. Product specificity drives brand linkage.",
+    "intrinsic_elements":         "Core visual brand elements (bottle shape, logo placement, brand colours).",
+    "additional_elements_and_product_placement": "Secondary visual elements and product placement style in scene.",
+    "most_frequently_used_word_in_creative": "The dominant text/copy message. Affects comprehension and key message recall.",
+}
 SCOPE_COL = {"ou":"operating_unit_code","category":"category",
              "brand":"brand_name","market":"country_name"}  # market kept in SCOPE_COL for backward compat with alerts
 ALL_METRICS = list(dict.fromkeys(list(METRICS.keys()) + NEW_METRICS))
@@ -253,7 +294,10 @@ def bpos(v):
 def sig_badge(s):
     if s in ("***","**","*"): return badge(s,"b-sig")
     return badge("ns","b-ns")
-def conf_badge(c): return badge(c.upper(), f"b-{c[:2]}")
+def conf_badge(c):
+    ranges = {"high": "80-100%", "medium": "60-79%", "low": "<60%"}
+    label = c.upper() + (f" ({ranges[c]})" if c in ranges else "")
+    return badge(label, f"b-{c[:2]}")
 
 def render_alerts(items, max_items=6):
     if not items: return
@@ -271,14 +315,28 @@ def render_alerts(items, max_items=6):
             return f'<strong style="color:{color};font-size:.88rem">{val}</strong>'
         return re.sub(r"[+\-]?\d+\.?\d*pp", repl, text)
 
+    def expand_metric_abbrevs(text):
+        """Replace Att/Pers/Like shorthand with full metric names."""
+        text = re.sub(r'\bAtt\b', 'Attention', text)
+        text = re.sub(r'\bPers\b', 'Persuasion', text)
+        text = re.sub(r'\bLike\b', 'Likeability', text)
+        text = re.sub(r'\bRec\b', 'Recall', text)
+        text = re.sub(r'\bShare\b', 'Shareability', text)
+        text = re.sub(r'\bTired\b', 'Tiredness', text)
+        text = re.sub(r'\bLink\b', 'Brand Linkage', text)
+        text = re.sub(r'\bUniq\b', 'Uniqueness', text)
+        # "all 3 metrics" → "all metrics (Attention, Persuasion, Likeability)"
+        text = re.sub(r'all 3 metrics', 'all metrics (Attention, Persuasion, Likeability)', text)
+        return text
     html = '<div class="insight-strip">'
     for it in items[:max_items]:
         css, icon = RULE_STYLE.get(it["type"], ("warn-insight","ℹ"))
+        display_text = expand_metric_abbrevs(highlight_pp(it["text"]))
         html += (f'<div class="insight-warn {css}">'
                  f'<div class="iw-icon">{icon}</div>'
                  f'<div class="iw-body">'
                  f'<div class="iw-type">{it["type"]}</div>'
-                 f'<div style="font-size:.82rem;color:#333">{highlight_pp(it["text"])}</div>'
+                 f'<div style="font-size:.82rem;color:#333">{display_text}</div>'
                  f'</div></div>')
     html += "</div>"
     st.markdown(html, unsafe_allow_html=True)
@@ -349,6 +407,35 @@ def compute_uplift(sub, feat, mc):
     except: p=1.0
     sig="***" if p<.001 else ("**" if p<.01 else ("*" if p<.05 else "ns"))
     return round(u,2),sig,len(g1)
+
+def compute_uplift_per_value(sub, feat, mc, min_n=5):
+    """For multi-value comma-separated features (occasions, passion_point),
+    compute uplift per individual value vs assets that have NO value for this feature."""
+    if feat not in sub.columns or mc not in sub.columns: return []
+    from collections import Counter
+    absent = sub.loc[~(sub[feat].notna() & (sub[feat].astype(str).str.strip()!="")), mc].dropna()
+    if len(absent) < min_n: return []
+    absent_mean = absent.mean()
+    # Count all individual values
+    val_counter = Counter()
+    for row_val in sub[feat].dropna():
+        for part in str(row_val).split(","):
+            part = part.strip()
+            if part: val_counter[part] += 1
+    rows = []
+    for val, cnt in val_counter.most_common():
+        mask = sub[feat].astype(str).str.contains(val, regex=False, na=False)
+        g = sub.loc[mask, mc].dropna()
+        if len(g) < min_n: continue
+        u = (g.mean() - absent_mean) * 100
+        try:
+            from scipy.stats import mannwhitneyu as mwu
+            _, p = mwu(g, absent, alternative="two-sided")
+        except: p = 1.0
+        sig = "***" if p<.001 else ("**" if p<.01 else ("*" if p<.05 else "ns"))
+        rows.append({"value": val, "uplift": round(u,2), "sig": sig, "n": len(g), "n_all": cnt})
+    rows.sort(key=lambda x: abs(x["uplift"]), reverse=True)
+    return rows[:15]
 
 def feature_combinations(sub, target, mc, top_n=5):
     """Top binary feature partners for target feat on metric mc."""
@@ -480,6 +567,7 @@ st.markdown("""
 with st.sidebar:
     st.markdown("### Navigation")
     page = st.radio("Go to", [
+        "ℹ · About this App",
         "01 · Overview & Performance",
         "02 · Feature Impact",
         "03 · Combination Explorer",
@@ -492,88 +580,253 @@ with st.sidebar:
                 unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SHARED SCOPE FILTER BAR
+# FILTER BAR — rendered per-page so hero appears above filters
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div style="padding:1.4rem 0 .3rem 0"></div>', unsafe_allow_html=True)
-st.markdown('<div class="sec-label">Scope</div>', unsafe_allow_html=True)
+def render_filters():
+    """Render the filter bar and return (sub_df, scope_filters, scope_key, min_n, scope_label).
+    Call this inside each page block, after the hero."""
+    st.markdown('<div class="sec-label" style="margin-top:1.4rem">Filters</div>', unsafe_allow_html=True)
+    fc1, fc2, fc3, fc4 = st.columns(4)
+    with fc1:
+        ou_opts = ["All OUs"] + sorted(df_full["operating_unit_code"].dropna().unique().tolist())
+        sel_ou = st.selectbox("Operating Unit", ou_opts, key="f_ou")
+    with fc2:
+        brand_opts = ["All Brands"] + sorted(df_full["brand_name"].dropna().unique().tolist())
+        sel_brand = st.selectbox("Brand", brand_opts, key="f_brand")
+    with fc3:
+        _csub = df_full.copy()
+        if sel_ou != "All OUs": _csub = _csub[_csub["operating_unit_code"] == sel_ou]
+        if sel_brand != "All Brands": _csub = _csub[_csub["brand_name"] == sel_brand]
+        _cdf = (_csub[["campaign_sk_id","campaign_display_name","campaign_code"]]
+                .drop_duplicates("campaign_sk_id").sort_values("campaign_display_name"))
+        camp_opts = ["All Campaigns"] + [f"{r.campaign_display_name} ({r.campaign_code})"
+                                          for r in _cdf.itertuples()]
+        camp_ids  = [None] + _cdf["campaign_sk_id"].tolist()
+        sel_camp_i = st.selectbox("Campaign", range(len(camp_opts)),
+                                   format_func=lambda i: camp_opts[i], key="f_camp")
+        sel_camp = camp_ids[sel_camp_i]
+    with fc4:
+        mkt_opts = sorted(df_full["country_name"].dropna().unique().tolist())
+        sel_mkts = st.multiselect("Market(s)", mkt_opts, default=[], key="f_mkts")
 
-SCOPE_TYPES = ["Global","OU","Category","Brand"]
-if "scope_types" not in st.session_state:
-    st.session_state.scope_types = ["Global"]
+    # apply filters
+    sub_df = df_full.copy()
+    scope_filters = []
+    if sel_ou != "All OUs":
+        sub_df = sub_df[sub_df["operating_unit_code"] == sel_ou]
+        scope_filters.append(("ou", sel_ou))
+    if sel_brand != "All Brands":
+        sub_df = sub_df[sub_df["brand_name"] == sel_brand]
+        scope_filters.append(("brand", sel_brand))
+    if sel_camp is not None:
+        sub_df = sub_df[sub_df["campaign_sk_id"] == sel_camp]
+    if sel_mkts:
+        sub_df = sub_df[sub_df["country_name"].isin(sel_mkts)]
+        for m in sel_mkts:
+            scope_filters.append(("market", m))
 
-# Pill-style scope buttons rendered as HTML + st.columns for click handling
-sc = st.columns(len(SCOPE_TYPES) + 2)
-for i,s in enumerate(SCOPE_TYPES):
-    with sc[i]:
-        active = s in st.session_state.scope_types
-        if st.button(f"· {s}" if active else s, key=f"sb_{s}"):
-            if s=="Global":
-                st.session_state.scope_types=["Global"]
-                for k in ["sel_ou","sel_cat","sel_brand"]:
-                    st.session_state.pop(k,None)
-            else:
-                if "Global" in st.session_state.scope_types:
-                    st.session_state.scope_types=[]
-                if s in st.session_state.scope_types:
-                    st.session_state.scope_types.remove(s)
-                else:
-                    st.session_state.scope_types.append(s)
-            st.rerun()
+    scope_key = get_scope_key(scope_filters[:1]) if sel_camp is None else None
+    min_n = 5 if scope_filters else 10
 
-scope_filters=[]
-KEY_MAP={
-    "OU":       ("ou",       sorted(df_full["operating_unit_code"].dropna().unique()),"sel_ou"),
-    "Category": ("category", sorted(df_full["category"].dropna().unique()),            "sel_cat"),
-    "Brand":    ("brand",    sorted(df_full["brand_name"].dropna().unique()),           "sel_brand"),
-}
-active_types = st.session_state.scope_types
-if active_types and "Global" not in active_types:
-    vcols=st.columns(len(active_types))
-    for i,stype in enumerate(active_types):
-        with vcols[i]:
-            tk,opts,sk=KEY_MAP[stype]
-            sv=st.selectbox(f"Select {stype}",opts,key=sk)
-            scope_filters.append((tk,sv))
+    chip_parts = []
+    if sel_ou != "All OUs":    chip_parts.append(f"OU: {sel_ou}")
+    if sel_brand != "All Brands": chip_parts.append(f"Brand: {sel_brand}")
+    if sel_camp is not None:   chip_parts.append(f"Campaign: {camp_opts[sel_camp_i].split('(')[0].strip()}")
+    if sel_mkts:               chip_parts.append(f"Markets: {', '.join(sel_mkts[:2])}{'...' if len(sel_mkts)>2 else ''}")
+    if chip_parts:
+        chips = "".join(f'<span class="scope-chip">{p}</span>' for p in chip_parts)
+        st.markdown(f'<div style="margin:.4rem 0 0 0">{chips}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<p style="font-size:.74rem;color:#CCC8C2;margin:.4rem 0 0 0">Average · All brands · All campaigns · All markets</p>',
+                    unsafe_allow_html=True)
 
-sel_camp = None  # campaign filter removed
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
 
-# apply filters
-sub_df=df_full.copy()
-for t,v in scope_filters:
-    sub_df=sub_df[sub_df[SCOPE_COL[t]]==v]
+    scope_label = "Global" if not chip_parts else " · ".join(chip_parts)
+    return sub_df, scope_filters, scope_key, min_n, scope_label, sel_camp_i
 
-scope_key=get_scope_key(scope_filters) if not sel_camp else None
-min_n=5 if scope_filters else 10
 
-# chips
-if scope_filters:
-    lmap={"ou":"OU","category":"Category","brand":"Brand"}
-    chips="".join(f'<span class="scope-chip">{lmap[t]}: {v}</span>' for t,v in scope_filters)
-    st.markdown(f'<div style="margin:.5rem 0 0 0">{chips}</div>',unsafe_allow_html=True)
-else:
-    st.markdown('<p style="font-size:.74rem;color:#CCC8C2;margin:.4rem 0 0 0">Global scope</p>',
-                unsafe_allow_html=True)
 
-st.markdown('<hr class="div">', unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 00 — ABOUT THIS APP (no filters needed)
+# ══════════════════════════════════════════════════════════════════════════════
+if page == "ℹ · About this App":
+    st.markdown("""
+    <div class="hero">
+      <div class="hero-eyebrow">About this App</div>
+      <div class="hero-title">Asset Intelligence</div>
+      <div class="hero-sub">A tool for Coca-Cola data analysts to understand which creative
+        features drive ad performance — and where, and why. Built on survey data and
+        statistical uplift analysis across thousands of tested assets.</div>
+    </div>""", unsafe_allow_html=True)
 
-if len(sub_df)<3:
-    st.warning(f"Only {len(sub_df)} assets in this scope — too few for analysis."); st.stop()
+    # ── How to use ────────────────────────────────────────────────────────────
+    st.markdown('<div class="sec-label">How to use this app</div>', unsafe_allow_html=True)
+    st.markdown(f"""<div style="background:#fff;border:1px solid #EAE8E2;border-radius:8px;padding:1.2rem 1.5rem;margin-bottom:1.2rem;">
+      <div style="font-size:.88rem;color:#333;line-height:1.8;">
+        The app is structured to answer three questions in order:
+      </div>
+      <div style="display:flex;gap:1rem;margin-top:.9rem;flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;background:#EBF3FB;border-radius:6px;padding:.8rem 1rem;">
+          <div style="font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#2D5BE3;margin-bottom:.3rem">1 · What happened?</div>
+          <div style="font-size:.83rem;color:#1C1C1C;font-weight:600">Overview &amp; Performance</div>
+          <div style="font-size:.78rem;color:#555;margin-top:.2rem">How did the campaign perform across all metrics? Which assets stand out?</div>
+        </div>
+        <div style="flex:1;min-width:180px;background:#EAFAF1;border-radius:6px;padding:.8rem 1rem;">
+          <div style="font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#2A8050;margin-bottom:.3rem">2 · Why?</div>
+          <div style="font-size:.83rem;color:#1C1C1C;font-weight:600">Feature Impact &amp; Combinations</div>
+          <div style="font-size:.78rem;color:#555;margin-top:.2rem">Which creative features drove those results? What combinations work best?</div>
+        </div>
+        <div style="flex:1;min-width:180px;background:#F3EEFF;border-radius:6px;padding:.8rem 1rem;">
+          <div style="font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#7030A0;margin-bottom:.3rem">3 · So what?</div>
+          <div style="font-size:.83rem;color:#1C1C1C;font-weight:600">Catalog, Rulebook &amp; Market Impact</div>
+          <div style="font-size:.78rem;color:#555;margin-top:.2rem">What should change in the next brief? Where do findings not apply?</div>
+        </div>
+      </div>
+      <div style="font-size:.8rem;color:#888;margin-top:.9rem;padding-top:.7rem;border-top:1px solid #F0EEE8;">
+        Use the <strong>Filters</strong> at the top to scope results by OU, Brand, Campaign, or Market.
+        All analysis updates in real time. Start with <strong>01 · Overview &amp; Performance</strong>
+        and work through the pages in order.
+      </div>
+    </div>""", unsafe_allow_html=True)
 
-scope_label = ("Global" if not scope_filters
-               else " · ".join(f"{t.upper()}={v}" for t,v in scope_filters))
+    # ── Page guide ────────────────────────────────────────────────────────────
+    st.markdown('<div class="sec-label">Page guide</div>', unsafe_allow_html=True)
 
+    pages = [
+        ("01 · Overview & Performance", "what", "WHAT HAPPENED",
+         "Your starting point. Shows all 8 metric KPI scores for the current filter, "
+         "a data-driven insight summary (Shareability, Recall, Tiredness highlighted), "
+         "campaign performance breakdown, and the top-performing assets ranked by any metric.",
+         "Start here after applying your filters. The insight summary at the top saves you "
+         "from having to manually interpret every number — it surfaces what matters."),
+        ("02 · Feature Impact", "why", "WHY",
+         "For every creative feature, shows how much higher or lower a chosen metric scores "
+         "when that feature is present vs absent. Sorted by effect size with significance stars. "
+         "Includes a per-value breakdown for Occasions and Passion Points.",
+         "Use this to answer: <em>which specific creative choices made the difference?</em> "
+         "Only act on *** or ** findings. ns = not significant → do not brief from it."),
+        ("03 · Combination Explorer", "why", "WHY",
+         "Shows the top greedy feature combinations per metric — the algorithm picks the "
+         "sequence of features that, together, maximise the score. Up to 3 distinct combinations "
+         "per metric. The Explorer lets you test any custom combination in real time.",
+         "Use this to build a multi-feature brief. The scoreboard shows trade-offs across "
+         "all 8 metrics simultaneously so you can spot if a combination hurts a metric "
+         "while helping another."),
+        ("04 · Feature Combinations & OU Impact", "why", "WHY",
+         "Two-part page: (A) synergy analysis — which features amplify each other's effect, "
+         "and (B) OU breakdown — how the same feature performs differently across Operating Units. "
+         "Red bars in the OU chart = the feature reverses in that OU.",
+         "Critical step before briefing. A feature that works at +5pp globally "
+         "may be −3pp in a specific OU. Always check Part B before writing a global brief."),
+        ("05 · Insight Catalog", "sowhat", "SO WHAT",
+         "The validated evidence base: every statistically tested finding from the full pipeline, "
+         "filterable by scope, metric, confidence level, and direction. Includes a market impact "
+         "section to see if findings hold across markets. Feature distributions shown for context.",
+         "High-confidence findings are safe to use in briefs directly. "
+         "Medium = directional only. Low = do not brief. "
+         "Filter by OU or Brand to see scope-specific findings."),
+        ("06 · Rulebook", "sowhat", "SO WHAT",
+         "Automated alerts: Conflicts (feature improves one metric, hurts another), "
+         "Heterogeneity (works on average but reverses in a specific scope), "
+         "Opportunities (positive feature used in <20% of assets), "
+         "Anti-patterns (negative across all metrics in a scope).",
+         "Always review <strong>high-severity</strong> entries before writing any brief. "
+         "Heterogeneity alerts are the most important — they prevent you from "
+         "briefing something globally that will hurt specific markets."),
+    ]
+
+    for page_name, phase_key, phase_lbl, desc, tip in pages:
+        phase_cls = f"phase-{phase_key}"
+        st.markdown(f"""<div class="page-card">
+          <div class="page-card-body">
+            <div><span class="page-card-phase {phase_cls}">{phase_lbl}</span></div>
+            <div class="page-card-title">{page_name}</div>
+            <div class="page-card-desc">{desc}</div>
+            <div class="page-card-tip"> <strong style="color:#1C1C1C;font-weight:700">Analyst tip:</strong> {tip}</div>
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+    # ── Metrics reference ─────────────────────────────────────────────────────
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">Metrics reference</div>', unsafe_allow_html=True)
+
+    metric_defs = [
+        ("Attention_T2B",             "Attention",          "Did the ad grab people's attention? Higher is better."),
+        ("Persuasion_T2B",            "Persuasion",         "Did the ad make people more likely to buy? Higher is better."),
+        ("Likeability_Love_Like_T2B", "Likeability",        "Did people love or like the ad? Higher is better."),
+        ("Experience_Recall_T2B",     "Experience Recall",  "Do people remember seeing this ad? Higher = stronger brand salience."),
+        ("Brand_Linkage_T2B",         "Brand Linkage",      "Do people correctly link the ad to the brand? Critical for attribution."),
+        ("Uniqueness_T2B",            "Uniqueness",         "Does the ad feel distinctive vs competitors? Higher = more differentiated."),
+        ("Shareability_T2B",          "Shareability",       "Would people share this ad? Proxy for organic reach and virality."),
+        ("Tiredness_T2B",             "Tiredness",          "Are people tired of seeing this ad? ⚠ Lower is better. High tiredness = audience fatigue → rotate creative."),
+    ]
+
+    col_m1, col_m2 = st.columns(2)
+    for i, (mc_r, lbl_r, desc_r) in enumerate(metric_defs):
+        col_r = col_m1 if i % 2 == 0 else col_m2
+        dot_col = M_COLOR.get(mc_r, DARK)
+        with col_r:
+            st.markdown(f"""<div class="metric-ref-row">
+              <div class="metric-ref-dot" style="background:{dot_col}"></div>
+              <div>
+                <div class="metric-ref-name">{lbl_r}</div>
+                <div class="metric-ref-desc">{desc_r}</div>
+              </div>
+            </div>""", unsafe_allow_html=True)
+
+    # ── Statistical glossary ──────────────────────────────────────────────────
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">Statistical glossary</div>', unsafe_allow_html=True)
+
+    glossary = [
+        ("pp (percentage points)", "Scores are expressed as the % of survey respondents giving a positive answer. "
+         "62pp = 62% of viewers responded positively."),
+        ("Uplift", "Mean score of assets WITH a feature minus mean score WITHOUT it. "
+         "+3pp uplift means ads with that feature score 3 points higher on average."),
+        ("Significance (*** ** * ns)", "How confident we are the result is not random noise. "
+         "*** = p<0.001 (very confident) · ** = p<0.01 · * = p<0.05 (directional) · "
+         "ns = not significant → do not use in a brief."),
+        ("Confidence (High/Medium/Low)", "High (80-100%): significant at ** or ***, 50+ assets per group — safe to brief. "
+         "Medium (60-79%): significant but smaller sample — directional only. "
+         "Low (<60%): not significant or tiny sample — do not brief."),
+        ("Baseline", "The average score of assets that do NOT have the feature. "
+         "Uplift is measured relative to this starting point."),
+        ("Synergy", "The extra gain from combining two features beyond what each delivers alone. "
+         "Positive synergy = the features amplify each other."),
+    ]
+
+    for term, defn in glossary:
+        st.markdown(f"""<div style="padding:.55rem 0;border-bottom:1px solid #F5F3EF;display:flex;gap:.8rem;">
+          <div style="font-size:.83rem;font-weight:700;color:#1C1C1C;width:200px;flex-shrink:0">{term}</div>
+          <div style="font-size:.82rem;color:#555;line-height:1.6">{defn}</div>
+        </div>""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 01 — OVERVIEW & PERFORMANCE
 # ══════════════════════════════════════════════════════════════════════════════
-if page == "01 · Overview & Performance":
+elif page == "01 · Overview & Performance":
     st.markdown(f"""
     <div class="hero">
-      <div class="hero-eyebrow">Overview &amp; Performance</div>
-      <div class="hero-title">How is this Selection performing?</div>
-      <div class="hero-sub">A summary of Attention, Persuasion, Likeability and other scores
-        for the assets in this selection, with scope alerts and top performing assets.</div>
+      <div class="hero-eyebrow">What Happened · Page 1 of 6</div>
+      <div class="hero-title">Overview &amp; Performance</div>
+      <div class="hero-sub">Your starting point. Metric scorecards for all 8 KPIs,
+        a data-driven insight summary, campaign breakdown, and top assets ranked by any metric.
+        Use this page to understand <em>what the numbers say</em> before digging into causes.</div>
     </div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="background:#EBF3FB;border-left:3px solid #2D5BE3;border-radius:0 4px 4px 0;
+      padding:.7rem 1rem;font-size:.82rem;color:#1A3A6A;margin-bottom:1.2rem;line-height:1.65;">
+      <strong>Analyst workflow:</strong> Start with the Insight Summary to get the headline read.
+      Then check the Campaign breakdown to see if performance differs across campaigns.
+      Use the Asset Viewer to inspect individual assets that stand out.
+      Once you know what happened, move to <strong>02 · Feature Impact</strong> to find out why.
+    </div>""", unsafe_allow_html=True)
+
+    sub_df, scope_filters, scope_key, min_n, scope_label, sel_camp_i = render_filters()
+    if len(sub_df) < 3:
+        st.warning(f"Only {len(sub_df)} assets match this filter — too few for analysis.")
+        st.stop()
+
 
     # KPI cards — row 1: assets + core 3
     k1,k2,k3,k4 = st.columns(4)
@@ -631,11 +884,263 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
 
     st.markdown('<hr class="div">', unsafe_allow_html=True)
 
-    # Scope alerts
-    alerts = get_scope_alerts(scope_filters)
-    if alerts:
-        with st.expander(f"⚠ {len(alerts)} alert{'s' if len(alerts)>1 else ''} for this scope", expanded=True):
-            render_alerts(alerts)
+    # ── CHANGE 13: Insight summary ────────────────────────────────────────────
+    st.markdown('<div class="sec-label">Insight summary</div>', unsafe_allow_html=True)
+    with st.expander("View performance summary across all metrics", expanded=True):
+        # Compute per-metric means
+        metric_summary = {}
+        for mc_s, ml_s in M_LABEL.items():
+            if mc_s in sub_df.columns:
+                v = sub_df[mc_s].dropna()
+                metric_summary[ml_s] = round(v.mean()*100, 1) if len(v)>0 else None
+
+        # Global means for comparison
+        global_means = {}
+        for mc_s, ml_s in M_LABEL.items():
+            if mc_s in df_full.columns:
+                v = df_full[mc_s].dropna()
+                global_means[ml_s] = round(v.mean()*100, 1) if len(v)>0 else None
+
+        # Build metric performance rows
+        perf_html = '<div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">'
+        for ml_s, val_s in metric_summary.items():
+            if val_s is None: continue
+            gv = global_means.get(ml_s)
+            diff = round(val_s - gv, 1) if gv else 0
+            is_tiredness = ml_s == "Tiredness"
+            # For Tiredness lower is better
+            if is_tiredness:
+                diff_col = GREEN if diff < -0.5 else (RED if diff > 0.5 else AMBER)
+            else:
+                diff_col = GREEN if diff > 0.5 else (RED if diff < -0.5 else AMBER)
+            sign = "+" if diff >= 0 else ""
+            border_col = RED if (is_tiredness and diff > 0.5) else (GREEN if diff > 0.5 else BORDER)
+            perf_html += (
+                f'<div style="background:#fff;border:1px solid {border_col};border-radius:6px;padding:.55rem .9rem;min-width:120px">' +
+                f'<div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#888">{ml_s}</div>' +
+                f'<div style="font-size:1.35rem;font-weight:700;color:{DARK};font-family:Merriweather,serif">{val_s:.1f}pp</div>' +
+                f'<div style="font-size:.72rem;color:{diff_col}">{sign}{diff:.1f}pp vs average</div>' +
+                f'</div>'
+            )
+        perf_html += '</div>'
+        st.markdown(perf_html, unsafe_allow_html=True)
+
+        # Narrative
+        shr_v = metric_summary.get("Shareability"); shr_g = global_means.get("Shareability")
+        rec_v = metric_summary.get("Experience Recall"); rec_g = global_means.get("Experience Recall")
+        trd_v = metric_summary.get("Tiredness"); trd_g = global_means.get("Tiredness")
+        att_v = metric_summary.get("Attention"); att_g = global_means.get("Attention")
+        pers_v = metric_summary.get("Persuasion")
+
+        narratives = []
+        if att_v and att_g:
+            diff_att = att_v - att_g
+            narratives.append(f"**Attention** is {'above' if diff_att>0.5 else 'below' if diff_att<-0.5 else 'in line with'} the average at **{att_v:.1f}pp** ({'+' if diff_att>=0 else ''}{diff_att:.1f}pp).")
+        if shr_v and shr_g:
+            diff_shr = shr_v - shr_g
+            if abs(diff_shr) > 0.5:
+                narratives.append(f"**Shareability** is {'stronger' if diff_shr>0 else 'weaker'} than average at **{shr_v:.1f}pp** ({'+' if diff_shr>=0 else ''}{diff_shr:.1f}pp) — {'content has higher viral/word-of-mouth potential.' if diff_shr>0 else 'consider features that drive sharing behaviour.'}")
+        if rec_v and rec_g:
+            diff_rec = rec_v - rec_g
+            if abs(diff_rec) > 0.5:
+                narratives.append(f"**Experience Recall** is {'above' if diff_rec>0 else 'below'} average at **{rec_v:.1f}pp** ({'+' if diff_rec>=0 else ''}{diff_rec:.1f}pp) — {'strong brand salience.' if diff_rec>0 else 'ad may not be memorable enough — check brand cues and product presence.'}")
+        if trd_v and trd_g:
+            diff_trd = trd_v - trd_g
+            if diff_trd > 0.5:
+                narratives.append(f"⚠ **Tiredness** is above average at **{trd_v:.1f}pp** (+{diff_trd:.1f}pp) — audience fatigue risk. Consider rotating creative or reducing frequency.")
+            elif diff_trd < -0.5:
+                narratives.append(f"✓ **Tiredness** is below average at **{trd_v:.1f}pp** ({diff_trd:.1f}pp) — audience is not fatigued.")
+
+        # Top feature drivers (Attention)
+        top_feat_rows = []
+        for feat_s in ALL_FEATS:
+            if feat_s not in sub_df.columns: continue
+            u_s, sig_s, n_s = compute_uplift(sub_df, feat_s, "Attention_T2B")
+            if u_s is not None and sig_s in ("***","**","*"):
+                top_feat_rows.append((FEAT_LABEL.get(feat_s,feat_s), u_s, sig_s))
+        top_feat_rows.sort(key=lambda x: abs(x[1]), reverse=True)
+        if top_feat_rows:
+            top_str = ", ".join(f"{n} ({u:+.1f}pp, {s})" for n,u,s in top_feat_rows[:3])
+            narratives.append(f"**Top feature drivers (Attention):** {top_str}.")
+
+        # Market nuances
+        if "country_name" in sub_df.columns and sub_df["country_name"].nunique() > 1:
+            mkt_att = (sub_df.groupby("country_name")["Attention_T2B"].mean().dropna()*100).sort_values(ascending=False)
+            if len(mkt_att) >= 2:
+                top_mkt = mkt_att.index[0]; bot_mkt = mkt_att.index[-1]
+                diff_mkt = mkt_att.iloc[0] - mkt_att.iloc[-1]
+                if diff_mkt > 3:
+                    narratives.append(f"**Market nuances:** Attention varies significantly — **{top_mkt}** leads at {mkt_att.iloc[0]:.1f}pp vs **{bot_mkt}** at {mkt_att.iloc[-1]:.1f}pp ({diff_mkt:.1f}pp gap). Check feature performance by market before briefing.")
+
+        for n_text in narratives:
+            st.markdown(f'<div style="font-size:.85rem;color:#333;line-height:1.65;margin-bottom:.4rem">{n_text}</div>', unsafe_allow_html=True)
+
+    # ── CHANGE 7: Campaign breakdown ──────────────────────────────────────────
+    if sub_df["campaign_sk_id"].nunique() > 1:
+        st.markdown('<hr class="div">', unsafe_allow_html=True)
+        st.markdown('<div class="sec-label">Performance by campaign</div>', unsafe_allow_html=True)
+        with st.expander(f"View {sub_df['campaign_sk_id'].nunique()} campaigns in this selection", expanded=False):
+            camp_mc_sel = st.selectbox("Metric", ["Attention","Persuasion","Likeability","Experience Recall","Brand Linkage","Uniqueness","Shareability","Tiredness"], key="camp_mc")
+            camp_mc_col = {"Attention":"Attention_T2B","Persuasion":"Persuasion_T2B","Likeability":"Likeability_Love_Like_T2B","Experience Recall":"Experience_Recall_T2B","Brand Linkage":"Brand_Linkage_T2B","Uniqueness":"Uniqueness_T2B","Shareability":"Shareability_T2B","Tiredness":"Tiredness_T2B"}[camp_mc_sel]
+            camp_grp = (sub_df.groupby(["campaign_sk_id","campaign_display_name"])[camp_mc_col]
+                        .agg(mean_val="mean", n="count").reset_index())
+            camp_grp["mean_val"] = camp_grp["mean_val"] * 100
+            camp_grp = camp_grp.sort_values("mean_val", ascending=False)
+            global_mean_camp = df_full[camp_mc_col].dropna().mean()*100 if camp_mc_col in df_full.columns else None
+            tbl_camp = '<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr style="border-bottom:2px solid #EAE8E2"><th style="text-align:left;padding:.4rem .6rem;color:#888">Campaign</th><th style="text-align:center;color:#888">Score</th><th style="text-align:center;color:#888">vs Average</th><th style="text-align:center;color:#888">n assets</th></tr></thead><tbody>'
+            for i, (_, rc) in enumerate(camp_grp.iterrows()):
+                bg_c = "#FAFAF8" if i%2==0 else "#FFF"
+                diff_c = rc["mean_val"] - global_mean_camp if global_mean_camp else 0
+                dc = GREEN if diff_c > 0.5 else (RED if diff_c < -0.5 else AMBER)
+                sign_c = "+" if diff_c >= 0 else ""
+                tbl_camp += (f'<tr style="background:{bg_c};border-bottom:1px solid #F5F3EF">'
+                             f'<td style="padding:.35rem .6rem">{str(rc["campaign_display_name"])[:50]}</td>'
+                             f'<td style="text-align:center;font-weight:600">{rc["mean_val"]:.1f}pp</td>'
+                             f'<td style="text-align:center;color:{dc}">{sign_c}{diff_c:.1f}pp</td>'
+                             f'<td style="text-align:center;color:#AAA">{int(rc["n"])}</td></tr>')
+            tbl_camp += '</tbody></table>'
+            st.markdown(tbl_camp, unsafe_allow_html=True)
+            # Top features per campaign (top 3 campaigns)
+            st.markdown('<div style="margin-top:1rem;font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6A6660">Top feature per campaign (most significant uplift)</div>', unsafe_allow_html=True)
+            for _, rc in camp_grp.head(3).iterrows():
+                camp_sub = sub_df[sub_df["campaign_sk_id"]==rc["campaign_sk_id"]]
+                if len(camp_sub) < 5: continue
+                best_feat, best_u, best_sig = None, 0, "ns"
+                for feat_c in BIN_FEATS:
+                    if feat_c not in camp_sub.columns: continue
+                    u_c,sig_c,_ = compute_uplift(camp_sub, feat_c, camp_mc_col)
+                    if u_c is not None and abs(u_c) > abs(best_u):
+                        best_feat, best_u, best_sig = feat_c, u_c, sig_c
+                if best_feat:
+                    col_c = GREEN if best_u >= 0 else RED
+                    st.markdown(f'<div style="font-size:.8rem;padding:.2rem 0;color:#333"><strong>{str(rc["campaign_display_name"])[:40]}</strong>: {FEAT_LABEL.get(best_feat,best_feat)} <span style="color:{col_c}">{"+" if best_u>=0 else ""}{best_u:.1f}pp</span> ({best_sig})</div>', unsafe_allow_html=True)
+
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+
+    # ── Performance findings summary ──────────────────────────────────────────
+    st.markdown('<div class="sec-label">Performance findings</div>', unsafe_allow_html=True)
+    st.markdown("""<div class="explain-box">
+    A summary of which creative features drove positive or negative performance,
+    and how each market performed relative to the average.
+    Use this to quickly identify what to repeat and what to avoid in the next brief.</div>""",
+    unsafe_allow_html=True)
+
+    _fs_col1, _fs_col2 = st.columns(2)
+
+    with _fs_col1:
+        # Feature drivers summary
+        st.markdown('<div style="font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6A6660;margin-bottom:.6rem">Feature drivers</div>', unsafe_allow_html=True)
+        pos_feats, neg_feats = [], []
+        for _feat in ALL_FEATS:
+            if _feat not in sub_df.columns: continue
+            for _mc_key in ["Attention_T2B","Persuasion_T2B","Likeability_Love_Like_T2B",
+                             "Shareability_T2B","Experience_Recall_T2B","Tiredness_T2B"]:
+                if _mc_key not in sub_df.columns: continue
+                # Lower min_n to 2 so small campaign selections still show results
+                if _feat in BIN_FEATS:
+                    _g1 = sub_df.loc[sub_df[_feat]==1, _mc_key].dropna()
+                    _g0 = sub_df.loc[sub_df[_feat]==0, _mc_key].dropna()
+                else:
+                    _mask = sub_df[_feat].notna() & (sub_df[_feat].astype(str).str.strip()!="")
+                    _g1 = sub_df.loc[_mask, _mc_key].dropna()
+                    _g0 = sub_df.loc[~_mask, _mc_key].dropna()
+                if len(_g1) < 2 or len(_g0) < 2: continue
+                _u = (_g1.mean() - _g0.mean()) * 100
+                try:
+                    from scipy.stats import mannwhitneyu as _mwu
+                    _, _p = _mwu(_g1, _g0, alternative="two-sided")
+                except: _p = 1.0
+                _sig = "***" if _p<.001 else ("**" if _p<.01 else ("*" if _p<.05 else "ns"))
+                _lbl = FEAT_LABEL.get(_feat, _feat)
+                _mlbl = M_LABEL.get(_mc_key, _mc_key)
+                entry = (_lbl, _mlbl, round(_u,2), _sig, len(_g1))
+                if _u > 0:
+                    pos_feats.append(entry)
+                else:
+                    neg_feats.append(entry)
+
+        def _dedup(rows):
+            seen = {}
+            for lbl, mlbl, u, sig, n in sorted(rows, key=lambda x: abs(x[2]), reverse=True):
+                k = (lbl, mlbl)
+                if k not in seen: seen[k] = (lbl, mlbl, u, sig, n)
+            return list(seen.values())[:8]
+
+        pos_feats = _dedup(pos_feats)
+        neg_feats = _dedup(neg_feats)
+
+        _small_n = len(sub_df) < 20
+        if _small_n:
+            st.markdown('<div style="font-size:.75rem;color:#906820;margin-bottom:.4rem">⚠ Small selection — showing all computed uplifts including ns (not significant). Treat as directional only.</div>', unsafe_allow_html=True)
+
+        if pos_feats:
+            st.markdown('<div style="font-size:.75rem;color:#2A8050;font-weight:600;margin-bottom:.3rem">▲ Positive drivers</div>', unsafe_allow_html=True)
+            for _lbl, _mlbl, _u, _sig, _n in pos_feats:
+                _sig_col = "#7030A0" if _sig in ("***","**","*") else "#CCC"
+                st.markdown(
+                    f'<div style="display:flex;justify-content:space-between;padding:.22rem 0;'
+                    f'border-bottom:1px solid #F5F3EF;font-size:.8rem">'
+                    f'<span style="color:#1C1C1C"><strong>{_lbl}</strong> on {_mlbl}</span>'
+                    f'<span style="display:flex;gap:.4rem;align-items:center">'
+                    f'<span style="color:#2A8050;font-weight:600">+{_u:.1f}pp</span>'
+                    f'<span style="color:{_sig_col};font-size:.72rem">{_sig}</span>'
+                    f'<span style="color:#CCC;font-size:.72rem">n={_n}</span>'
+                    f'</span></div>',
+                    unsafe_allow_html=True)
+        else:
+            st.markdown('<p style="font-size:.8rem;color:#AAA">No positive drivers found.</p>', unsafe_allow_html=True)
+
+        if neg_feats:
+            st.markdown('<div style="font-size:.75rem;color:#C00020;font-weight:600;margin:.7rem 0 .3rem 0">▼ Negative drivers</div>', unsafe_allow_html=True)
+            for _lbl, _mlbl, _u, _sig, _n in neg_feats:
+                _sig_col = "#7030A0" if _sig in ("***","**","*") else "#CCC"
+                st.markdown(
+                    f'<div style="display:flex;justify-content:space-between;padding:.22rem 0;'
+                    f'border-bottom:1px solid #F5F3EF;font-size:.8rem">'
+                    f'<span style="color:#1C1C1C"><strong>{_lbl}</strong> on {_mlbl}</span>'
+                    f'<span style="display:flex;gap:.4rem;align-items:center">'
+                    f'<span style="color:#C00020;font-weight:600">{_u:.1f}pp</span>'
+                    f'<span style="color:{_sig_col};font-size:.72rem">{_sig}</span>'
+                    f'<span style="color:#CCC;font-size:.72rem">n={_n}</span>'
+                    f'</span></div>',
+                    unsafe_allow_html=True)
+
+    with _fs_col2:
+        # Market performance summary
+        st.markdown('<div style="font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6A6660;margin-bottom:.6rem">Market performance</div>', unsafe_allow_html=True)
+        _ref_mc = "Attention_T2B"
+        if _ref_mc in sub_df.columns and "country_name" in sub_df.columns:
+            _mkt_means = (sub_df.groupby("country_name")[_ref_mc]
+                         .mean().dropna() * 100).sort_values(ascending=False)
+            _avg_mean = df_full[_ref_mc].dropna().mean() * 100 if _ref_mc in df_full.columns else None
+            _pos_mkts = [(m, v) for m, v in _mkt_means.items() if _avg_mean is None or v >= _avg_mean]
+            _neg_mkts = [(m, v) for m, v in _mkt_means.items() if _avg_mean is not None and v < _avg_mean]
+
+            st.markdown(f'<div style="font-size:.72rem;color:#888;margin-bottom:.5rem">Based on Attention vs average ({_avg_mean:.1f}pp)</div>' if _avg_mean else "", unsafe_allow_html=True)
+
+            if _pos_mkts:
+                st.markdown('<div style="font-size:.75rem;color:#2A8050;font-weight:600;margin-bottom:.3rem">▲ Above average</div>', unsafe_allow_html=True)
+                for _m, _v in _pos_mkts[:8]:
+                    _diff = _v - _avg_mean if _avg_mean else 0
+                    st.markdown(
+                        f'<div style="display:flex;justify-content:space-between;padding:.22rem 0;' +
+                        f'border-bottom:1px solid #F5F3EF;font-size:.8rem">' +
+                        f'<span style="color:#1C1C1C">{_m}</span>' +
+                        f'<span style="color:#2A8050;font-weight:600">{_v:.1f}pp (+{_diff:.1f}pp)</span></div>',
+                        unsafe_allow_html=True)
+
+            if _neg_mkts:
+                st.markdown('<div style="font-size:.75rem;color:#C00020;font-weight:600;margin:.7rem 0 .3rem 0">▼ Below average</div>', unsafe_allow_html=True)
+                for _m, _v in _neg_mkts[:8]:
+                    _diff = _v - _avg_mean if _avg_mean else 0
+                    st.markdown(
+                        f'<div style="display:flex;justify-content:space-between;padding:.22rem 0;' +
+                        f'border-bottom:1px solid #F5F3EF;font-size:.8rem">' +
+                        f'<span style="color:#1C1C1C">{_m}</span>' +
+                        f'<span style="color:#C00020;font-weight:600">{_v:.1f}pp ({_diff:.1f}pp)</span></div>',
+                        unsafe_allow_html=True)
+        else:
+            st.markdown('<p style="font-size:.8rem;color:#AAA">No market data available for this selection.</p>', unsafe_allow_html=True)
 
     # Top assets by metric
     st.markdown('<div class="sec-label">Top performing assets</div>', unsafe_allow_html=True)
@@ -744,6 +1249,7 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
             ]
             seen = set()
             av_feats_ext = {}
+            av_feats_ext_keys = {}  # label -> feat_key for description lookup
             for f in EXTENDED_FEAT_COLS:
                 if f in seen: continue
                 seen.add(f)
@@ -751,7 +1257,42 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
                 if pd.notna(val) and str(val).strip() not in ("","nan"):
                     label = FEAT_LABEL.get(f, f.replace("_"," ").title())
                     av_feats_ext[label] = str(val)
+                    av_feats_ext_keys[label] = f
 
+            # Build objects HTML
+            av_objects = str(av_row.get("objects","")).strip()
+            obj_html_av = ""
+            if av_objects and av_objects != "nan":
+                obj_tags = "".join(
+                    f'<span style="display:inline-block;background:#EBF3FB;border-radius:3px;padding:.1rem .45rem;margin:.1rem .15rem 0 0;font-size:.73rem;color:#2D5BE3">{o.strip()}</span>'
+                    for o in av_objects.split(",") if o.strip()
+                )
+                obj_html_av = f'''<div style="margin-top:.8rem">
+                  <div style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6A6660;margin-bottom:.3rem">Detected objects</div>
+                  <div style="line-height:2">{obj_tags}</div></div>'''
+
+            # Build feature rows with descriptions
+            feat_rows_html = ""
+            for lbl, val in av_feats_ext.items():
+                fkey = av_feats_ext_keys.get(lbl, "")
+                desc = FEAT_DESC.get(fkey, "")
+                feat_rows_html += (
+                    f'<div style="padding:.28rem 0;border-bottom:1px solid #F5F3EF">' +
+                    f'<div style="display:flex;gap:.5rem"><span style="font-size:.78rem;color:#888;width:150px;flex-shrink:0">{lbl}</span><span style="font-size:.82rem;color:#1C1C1C;font-weight:500">{val}</span></div>'
+                )
+                if desc:
+                    feat_rows_html += f'<div style="font-size:.71rem;color:#AAA;padding-left:155px;margin-top:.06rem">{desc}</div>'
+                feat_rows_html += '</div>'
+            if not feat_rows_html:
+                feat_rows_html = '<div style="font-size:.83rem;color:#AAA">No feature data</div>'
+
+            av_caption = str(av_row.get("asset_caption", "")).strip()
+            caption_html = ""
+            if av_caption and av_caption != "nan":
+                caption_html = f'''<div style="margin-top:.8rem;padding:.6rem .8rem;background:#F5F3EF;border-radius:4px;">
+                  <div style="font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6A6660;margin-bottom:.25rem">AI Caption</div>
+                  <div style="font-size:.8rem;color:#444;line-height:1.55;font-style:italic">{av_caption[:300]}{"…" if len(av_caption)>300 else ""}</div>
+                </div>'''
             st.markdown(f"""<div style="background:#fff;border:1px solid #EAE8E2;border-radius:6px;padding:1.2rem 1.4rem;">
               <div style="font-size:.95rem;font-weight:600;color:#1C1C1C;margin-bottom:.3rem">{av_sel}</div>
               <div style="font-size:.78rem;color:#AAA89E;margin-bottom:.6rem">
@@ -759,6 +1300,7 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
                 {av_row.get("campaign_display_name","")}
               </div>
               {av_link}
+              {caption_html}
               <div style="margin-top:1rem">
                 <div style="font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#6A6660;margin-bottom:.4rem">Binary features present</div>
                 <div style="font-size:.83rem;color:#3A3830">
@@ -767,8 +1309,9 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
               </div>
               <div style="margin-top:.9rem">
                 <div style="font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#6A6660;margin-bottom:.4rem">All features</div>
-                {"".join(f'<div style="display:flex;gap:.5rem;padding:.22rem 0;border-bottom:1px solid #F5F3EF"><span style="font-size:.78rem;color:#888;width:150px;flex-shrink:0">{k}</span><span style="font-size:.82rem;color:#1C1C1C;font-weight:500">{v}</span></div>' for k,v in av_feats_ext.items()) if av_feats_ext else '<div style="font-size:.83rem;color:#AAA">No feature data</div>'}
+                {feat_rows_html}
               </div>
+              {obj_html_av}
             </div>""", unsafe_allow_html=True)
 
         with av_col2:
@@ -802,11 +1345,27 @@ A score of 62pp means 62% of people who watched the ad responded positively to t
 elif page == "02 · Feature Impact":
     st.markdown(f"""
     <div class="hero">
-      <div class="hero-eyebrow">Feature Impact</div>
-      <div class="hero-title">How does each feature affect performance?</div>
-      <div class="hero-sub">For each Asset feature, see whether including it in an ad
-        is associated with higher or lower scores — globally and within each OU.</div>
+      <div class="hero-eyebrow">Why · Page 2 of 6</div>
+      <div class="hero-title">Feature Impact</div>
+      <div class="hero-sub">For each creative feature, the statistical uplift on your
+        chosen metric — how much higher or lower the score is when the feature is present.
+        Use this page to identify <em>which creative choices drove the results</em> you saw on page 01.</div>
     </div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="background:#EAFAF1;border-left:3px solid #2A8050;border-radius:0 4px 4px 0;
+      padding:.7rem 1rem;font-size:.82rem;color:#1A4A30;margin-bottom:1.2rem;line-height:1.65;">
+      <strong>Analyst workflow:</strong> Select the metric you care most about, then read the table top-to-bottom.
+      Focus only on *** and ** findings — these are statistically reliable.
+      * is directional; ns should never appear in a brief.
+      Open the <strong>Occasions &amp; Passion Point</strong> expander to see which specific values
+      (e.g. "Sport / Football" vs "Festive") drive the result — not just whether the feature is present.
+      Then go to <strong>03 · Combination Explorer</strong> to test combinations.
+    </div>""", unsafe_allow_html=True)
+
+    sub_df, scope_filters, scope_key, min_n, scope_label, sel_camp_i = render_filters()
+    if len(sub_df) < 3:
+        st.warning(f"Only {len(sub_df)} assets match this filter — too few for analysis.")
+        st.stop()
+
 
     st.markdown("""<div class="explain-box">
     <strong>How to read this page:</strong> Each bar shows the <em>uplift</em> for that feature —
@@ -876,13 +1435,105 @@ elif page == "02 · Feature Impact":
             st.info("Not enough data to compute feature impact for this scope.")
 
     with col_alerts:
-        st.markdown('<div class="sec-label">Alerts for this scope</div>', unsafe_allow_html=True)
-        alerts=get_scope_alerts(scope_filters)
-        if alerts:
-            render_alerts(alerts, max_items=8)
-        else:
-            st.markdown('<p style="color:#AAA;font-size:.82rem">No alerts for this scope.</p>',
-                        unsafe_allow_html=True)
+        st.markdown('<div class="sec-label">Findings summary</div>', unsafe_allow_html=True)
+
+        # Positive feature drivers
+        pos_feats = [(FEAT_LABEL.get(r["feat"],r["feat"]), r["uplift"], r["sig"])
+                     for r in (rows if rows else [])
+                     if r["uplift"] > 0 and r["sig"] in ("***","**","*")]
+        pos_feats.sort(key=lambda x: x[1], reverse=True)
+
+        neg_feats = [(FEAT_LABEL.get(r["feat"],r["feat"]), r["uplift"], r["sig"])
+                     for r in (rows if rows else [])
+                     if r["uplift"] < 0 and r["sig"] in ("***","**","*")]
+        neg_feats.sort(key=lambda x: x[1])
+
+        # Market impact
+        pos_mkts = []; neg_mkts = []
+        if "country_name" in sub_df.columns and sub_df["country_name"].nunique() > 1:
+            mkt_scores = (sub_df.groupby("country_name")[mc].mean().dropna() * 100)
+            scope_mean_mc = sub_df[mc].dropna().mean() * 100
+            for mkt, val in mkt_scores.items():
+                diff = val - scope_mean_mc
+                if diff > 1.0:   pos_mkts.append((mkt, diff))
+                elif diff < -1.0: neg_mkts.append((mkt, diff))
+            pos_mkts.sort(key=lambda x: x[1], reverse=True)
+            neg_mkts.sort(key=lambda x: x[1])
+
+        def summary_rows(items, color, sign=""):
+            if not items:
+                return '<div style="font-size:.79rem;color:#AAA;padding:.3rem 0">No significant findings</div>'
+            html = ""
+            for name, val, *_ in items[:5]:
+                html += (f'<div style="display:flex;justify-content:space-between;'
+                         f'padding:.28rem 0;border-bottom:1px solid #F5F3EF;font-size:.8rem">'
+                         f'<span style="color:#1C1C1C">{name}</span>'
+                         f'<span style="font-weight:600;color:{color}">{sign if val>0 else ""}{val:.1f}pp</span>'
+                         f'</div>')
+            return html
+
+        def mkt_rows(items, color):
+            if not items:
+                return '<div style="font-size:.79rem;color:#AAA;padding:.3rem 0">No markets above threshold</div>'
+            html = ""
+            for name, val in items[:5]:
+                sign = "+" if val > 0 else ""
+                html += (f'<div style="display:flex;justify-content:space-between;'
+                         f'padding:.28rem 0;border-bottom:1px solid #F5F3EF;font-size:.8rem">'
+                         f'<span style="color:#1C1C1C">{name}</span>'
+                         f'<span style="font-weight:600;color:{color}">{sign}{val:.1f}pp</span>'
+                         f'</div>')
+            return html
+
+        feat_pos_html = summary_rows([(n,v,s) for n,v,s in pos_feats], GREEN, "+")
+        feat_neg_html = summary_rows([(n,v,s) for n,v,s in neg_feats], RED)
+        mkt_pos_html  = mkt_rows(pos_mkts, GREEN)
+        mkt_neg_html  = mkt_rows(neg_mkts, RED)
+
+        st.markdown(f"""
+        <div style="font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+          color:#2A8050;margin:.5rem 0 .2rem 0">Features driving positive impact</div>
+        {feat_pos_html}
+        <div style="font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+          color:#C00020;margin:.8rem 0 .2rem 0">Features driving negative impact</div>
+        {feat_neg_html}
+        <div style="font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+          color:#2A8050;margin:.8rem 0 .2rem 0">Markets above average</div>
+        {mkt_pos_html}
+        <div style="font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+          color:#C00020;margin:.8rem 0 .2rem 0">Markets below average</div>
+        {mkt_neg_html}
+        <div style="font-size:.69rem;color:#AAA;margin-top:.7rem">
+          Showing significant features only (*** ** *). Market delta vs scope mean on {mc_sel}. Threshold ±1pp.
+        </div>""", unsafe_allow_html=True)
+
+    # ── Per-value breakdown for Occasions and Passion Point (outside columns) ─
+    with st.expander("Occasions & Passion Point — per-value impact", expanded=False):
+        st.markdown("""<div style="font-size:.82rem;color:#555;margin-bottom:.7rem">
+        Each individual Occasion and Passion Point value is tested against assets
+        that have <em>no</em> occasion or passion point assigned. This shows which
+        specific values drive performance, not just whether the feature is present.</div>""",
+        unsafe_allow_html=True)
+        for feat_pv, lbl_pv in [("occasions","Occasions"), ("passion_point","Passion Point")]:
+            st.markdown(f'<div style="font-size:.75rem;font-weight:700;color:#6A6660;margin:.6rem 0 .35rem 0">{lbl_pv} — uplift on {mc_sel}</div>', unsafe_allow_html=True)
+            pv_rows = compute_uplift_per_value(sub_df, feat_pv, mc)
+            if pv_rows:
+                tbl_pv = '<table style="width:100%;border-collapse:collapse;font-size:.78rem">'
+                tbl_pv += '<thead><tr style="border-bottom:1px solid #EAE8E2"><th style="text-align:left;padding:.3rem .4rem;color:#888;font-size:.68rem">Value</th><th style="text-align:center;padding:.3rem .4rem;color:#888;font-size:.68rem">Uplift</th><th style="text-align:center;color:#7030A0;font-size:.68rem">Sig</th><th style="text-align:center;color:#888;font-size:.68rem">n</th></tr></thead><tbody>'
+                for idx_pv, rv in enumerate(pv_rows):
+                    uc2 = GREEN if rv["uplift"]>=0 else RED
+                    bg2 = "#FAFAF8" if idx_pv%2==0 else "#FFF"
+                    sc2 = "#7030A0" if rv["sig"] in ("***","**","*") else "#CCC"
+                    sign_pv = "+" if rv["uplift"]>=0 else ""
+                    tbl_pv += (f'<tr style="background:{bg2};border-bottom:1px solid #F5F3EF">'
+                               f'<td style="padding:.28rem .4rem;max-width:300px">{rv["value"][:50]}</td>'
+                               f'<td style="text-align:center;font-weight:600;color:{uc2}">{sign_pv}{rv["uplift"]:.1f}pp</td>'
+                               f'<td style="text-align:center;color:{sc2}">{rv["sig"]}</td>'
+                               f'<td style="text-align:center;color:#AAA">{rv["n"]}</td></tr>')
+                tbl_pv += "</tbody></table>"
+                st.markdown(tbl_pv, unsafe_allow_html=True)
+            else:
+                st.markdown('<p style="color:#AAA;font-size:.8rem">Not enough data.</p>', unsafe_allow_html=True)
 
     # Insight catalog entries for this metric
     if has_ins and catalog is not None:
@@ -930,11 +1581,27 @@ elif page == "02 · Feature Impact":
 elif page == "03 · Combination Explorer":
     st.markdown(f"""
     <div class="hero">
-      <div class="hero-eyebrow">Combination Explorer</div>
-      <div class="hero-title">What feature combination drives the highest scores?</div>
-      <div class="hero-sub">The best combination is found automatically for each metric.
-        Then build and score your own combination in real time below.</div>
+      <div class="hero-eyebrow">Why · Page 3 of 6</div>
+      <div class="hero-title">Combination Explorer</div>
+      <div class="hero-sub">Features rarely work in isolation. This page finds the sequence of
+        features that, combined, maximise a metric — and lets you test any custom combination
+        in real time across all 8 metrics simultaneously.</div>
     </div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="background:#EAFAF1;border-left:3px solid #2A8050;border-radius:0 4px 4px 0;
+      padding:.7rem 1rem;font-size:.82rem;color:#1A4A30;margin-bottom:1.2rem;line-height:1.65;">
+      <strong>Analyst workflow:</strong> Each metric tab shows up to 3 distinct combinations,
+      ordered by total uplift. Combination 1 is the strongest; Combinations 2 and 3 use
+      different features so you have alternatives for briefing.
+      Use the <strong>Explorer</strong> below to test your own combinations —
+      the scoreboard shows all 8 metrics at once so you can spot trade-offs immediately.
+      A combination that boosts Attention but increases Tiredness may not be worth briefing.
+    </div>""", unsafe_allow_html=True)
+
+    sub_df, scope_filters, scope_key, min_n, scope_label, sel_camp_i = render_filters()
+    if len(sub_df) < 3:
+        st.warning(f"Only {len(sub_df)} assets match this filter — too few for analysis.")
+        st.stop()
+
 
     st.markdown("""<div class="explain-box">
     <strong>How the best combination works:</strong> The algorithm starts with the baseline
@@ -1087,7 +1754,7 @@ elif page == "03 · Combination Explorer":
                 so you can see which specific values drive performance.
               </div>""",unsafe_allow_html=True)
 
-            ss=f"sel_{mc}_{hash(str(scope_filters))}_{sel_camp}"
+            ss=f"sel_{mc}_{hash(str(scope_filters))}_{sel_camp_i}"
             if ss not in st.session_state:
                 st.session_state[ss]=default_sel(combo) if combo else {f:"__any__" for f in ALL_FEATS}
             cur=st.session_state[ss]; new=dict(cur); changed=False
@@ -1105,7 +1772,7 @@ elif page == "03 · Combination Explorer":
                         except ValueError: ci2=0
                         ch=st.selectbox(FEAT_LABEL.get(feat,feat),range(len(raws)),
                                          format_func=lambda i,d=disps:d[i],index=ci2,
-                                         key=f"d_{mc}_{feat}_{hash(str(scope_filters))}_{sel_camp}")
+                                         key=f"d_{mc}_{feat}_{hash(str(scope_filters))}_{sel_camp_i}")
                         chv=raws[ch]; new[feat]=chv
                         if chv!=cr: changed=True
                 for ci in range(len(row_feats),5): cols[ci].empty()
@@ -1114,11 +1781,11 @@ elif page == "03 · Combination Explorer":
 
             r1,r2,_=st.columns([1,1,7])
             with r1:
-                if st.button("↺ Reset",key=f"rst_{mc}_{hash(str(scope_filters))}_{sel_camp}"):
+                if st.button("↺ Reset",key=f"rst_{mc}_{hash(str(scope_filters))}_{sel_camp_i}"):
                     st.session_state[ss]=default_sel(combo) if combo else {f:"__any__" for f in ALL_FEATS}
                     st.rerun()
             with r2:
-                if st.button("✕ Clear",key=f"clr_{mc}_{hash(str(scope_filters))}_{sel_camp}"):
+                if st.button("✕ Clear",key=f"clr_{mc}_{hash(str(scope_filters))}_{sel_camp_i}"):
                     st.session_state[ss]={f:"__any__" for f in ALL_FEATS}; st.rerun()
 
             # Scoreboard
@@ -1167,11 +1834,26 @@ elif page == "03 · Combination Explorer":
 elif page == "04 · Feature Combinations & OU Impact":
     st.markdown(f"""
     <div class="hero">
-      <div class="hero-eyebrow">Combinations &amp; OU Impact</div>
-      <div class="hero-title">Which features work together, and where?</div>
-      <div class="hero-sub">Find the best partner features for any feature you select,
-        see the expected combined impact, and compare performance across Operating Units.</div>
+      <div class="hero-eyebrow">Why · Page 4 of 6</div>
+      <div class="hero-title">Feature Combinations &amp; OU Impact</div>
+      <div class="hero-sub">Two questions in one page: which features amplify each other's effect
+        (synergy analysis), and does the same feature perform consistently across Operating Units?
+        A positive feature on average can reverse in specific markets.</div>
     </div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="background:#EAFAF1;border-left:3px solid #2A8050;border-radius:0 4px 4px 0;
+      padding:.7rem 1rem;font-size:.82rem;color:#1A4A30;margin-bottom:1.2rem;line-height:1.65;">
+      <strong>Analyst workflow:</strong> Select a feature you want to brief, then check
+      <strong>Part A</strong> for which other features amplify it (positive synergy = brief both together).
+      Then check <strong>Part B</strong> — if any OU bar is red, that OU needs a different brief.
+      Never brief a feature without checking Part B first.
+      The best-combination-per-OU table shows what to recommend locally when the dataset average doesn't apply.
+    </div>""", unsafe_allow_html=True)
+
+    sub_df, scope_filters, scope_key, min_n, scope_label, sel_camp_i = render_filters()
+    if len(sub_df) < 3:
+        st.warning(f"Only {len(sub_df)} assets match this filter — too few for analysis.")
+        st.stop()
+
 
     feat_opts=[(f,FEAT_LABEL.get(f,f)) for f in BIN_FEATS if f in sub_df.columns]
     feat_labels=[fl for _,fl in feat_opts]
@@ -1252,9 +1934,9 @@ elif page == "04 · Feature Combinations & OU Impact":
         st.markdown(f"""<div class="explain-box">
         The same feature can perform very differently across Operating Units.
         Each bar shows the {mc_c} uplift for <strong>{sel_fl}</strong> within that OU.
-        The blue dotted line is the global average. A red bar means the feature is
+        The blue dotted line is the dataset average. A red bar means the feature is
         associated with <em>lower</em> scores in that OU — critical to check before
-        briefing a globally positive feature.</div>""",unsafe_allow_html=True)
+        briefing a positive feature on average.</div>""",unsafe_allow_html=True)
 
         ou_rows=[]
         for ou in sorted(df_full["operating_unit_code"].dropna().unique()):
@@ -1274,7 +1956,7 @@ elif page == "04 · Feature Combinations & OU Impact":
                      alpha=.85,height=.62)
             ax.axvline(0,color=DARK,lw=1.2,ls="--")
             if g_u is not None:
-                ax.axvline(g_u,color=BLUE,lw=1.5,ls=":",alpha=.75,label=f"Global avg: {g_u:+.1f}pp")
+                ax.axvline(g_u,color=BLUE,lw=1.5,ls=":",alpha=.75,label=f"Avg: {g_u:+.1f}pp")
                 ax.legend(fontsize=8)
             for i,(_,r) in enumerate(ou_df.iterrows()):
                 v=r["uplift"]
@@ -1322,12 +2004,26 @@ elif page == "05 · Insight Catalog":
 
     st.markdown(f"""
     <div class="hero">
-      <div class="hero-eyebrow">Insight Catalog</div>
-      <div class="hero-title">All validated findings</div>
-      <div class="hero-sub">Every finding from the statistical pipeline, tagged with
-        evidence and confidence. Filter by scope, feature, metric, or OU.
-        High-confidence insights are safe to use in briefs.</div>
+      <div class="hero-eyebrow">So What · Page 5 of 6</div>
+      <div class="hero-title">Insight Catalog</div>
+      <div class="hero-sub">The evidence base for creative briefs. Every statistically tested
+        finding — filterable by scope, metric, and confidence level.
+        High-confidence findings are safe to brief directly. Always check the market impact
+        section before recommending a finding for a specific region.</div>
     </div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="background:#F3EEFF;border-left:3px solid #7030A0;border-radius:0 4px 4px 0;
+      padding:.7rem 1rem;font-size:.82rem;color:#3A1A6A;margin-bottom:1.2rem;line-height:1.65;">
+      <strong>Analyst workflow:</strong> Filter by <strong>Confidence: High</strong> to get findings
+      safe for briefing. Use the Scope dropdown (OU or Brand) to check if findings are specific
+      to your context or truly global. Open <strong>Market impact</strong> to see whether a
+      finding reverses in any market. The feature panel above the results shows asset prevalence
+      in scope — useful for understanding how common each feature is in practice.
+    </div>""", unsafe_allow_html=True)
+
+    sub_df, scope_filters, scope_key, min_n, scope_label, sel_camp_i = render_filters()
+    if len(sub_df) < 3:
+        st.warning(f"Only {len(sub_df)} assets match this filter — too few for analysis.")
+        st.stop()
 
     with st.expander("How to use this catalog"):
         st.markdown("""
@@ -1356,7 +2052,7 @@ elif page == "05 · Insight Catalog":
         scope_opts=["All"]+sorted(
             [f"{r['filter']}: {r['filter_value']}" for _,r in
              catalog[["filter","filter_value"]].drop_duplicates().iterrows()
-             if r["filter"] in ("OU","Brand")])
+             if r["filter"] in ("OU","Brand","Market")])
         cat_scope=st.selectbox("Scope",scope_opts,
                                 index=scope_opts.index(default_scope) if default_scope in scope_opts else 0)
     with cf2:
@@ -1453,6 +2149,52 @@ elif page == "05 · Insight Catalog":
 
     st.markdown('<hr class="div">', unsafe_allow_html=True)
 
+    # ── Market impact comparison ──────────────────────────────────────────────
+    with st.expander("Market impact — how do findings differ across markets?", expanded=False):
+        st.markdown("""<div style="font-size:.82rem;color:#555;margin-bottom:.7rem">
+        Select a feature and metric to see how the uplift varies across markets.
+        Red bars = the feature hurts performance in that market (reversal).
+        Always check for reversals before briefing a positive feature on average locally.</div>""",
+        unsafe_allow_html=True)
+        mkt_feat_opts = [(f, FEAT_LABEL.get(f,f)) for f in BIN_FEATS if f in sub_df.columns]
+        mkt_fi = st.selectbox("Feature", range(len(mkt_feat_opts)),
+                               format_func=lambda i: mkt_feat_opts[i][1], key="mkt_ins_feat")
+        mkt_mc_sel = st.selectbox("Metric", list({v:k for k,v in M_LABEL.items()}.keys()), key="mkt_ins_mc")
+        mkt_mc_col2 = {v:k for k,v in M_LABEL.items()}.get(mkt_mc_sel, "Attention_T2B")
+        mkt_feat_col, _ = mkt_feat_opts[mkt_fi]
+        mkt_rows_ins = []
+        for mkt in sorted(df_full["country_name"].dropna().unique()):
+            mkt_sub2 = df_full[df_full["country_name"]==mkt]
+            u2,sig2,n2 = compute_uplift(mkt_sub2, mkt_feat_col, mkt_mc_col2)
+            if u2 is not None: mkt_rows_ins.append({"Market":mkt,"Uplift (pp)":round(u2,1),"Sig":sig2,"n":n2})
+        if mkt_rows_ins:
+            mkt_ins_df = pd.DataFrame(mkt_rows_ins).sort_values("Uplift (pp)", ascending=False)
+            g_u2,_,_ = compute_uplift(df_full, mkt_feat_col, mkt_mc_col2)
+            tbl_mkt_ins = '<table style="width:100%;border-collapse:collapse;font-size:.8rem"><thead><tr style="border-bottom:2px solid #EAE8E2"><th style="text-align:left;padding:.35rem .5rem;color:#888">Market</th><th style="text-align:center;color:#888">Uplift</th><th style="text-align:center;color:#7030A0">Sig</th><th style="text-align:center;color:#888">n</th><th style="text-align:left;color:#888">Signal</th></tr></thead><tbody>'
+            for i,(_, rm) in enumerate(mkt_ins_df.iterrows()):
+                bg3 = "#FAFAF8" if i%2==0 else "#FFF"
+                uc3 = GREEN if rm["Uplift (pp)"]>=0 else RED
+                sig3 = rm["Sig"]
+                signal = ""
+                if g_u2 is not None and rm["Uplift (pp)"] < 0 < g_u2 and sig3 in ("*","**","***"):
+                    signal = '<span style="color:#C00020;font-size:.72rem">⚠ Reversal</span>'
+                elif sig3 in ("**","***") and rm["Uplift (pp)"] > 0:
+                    signal = '<span style="color:#2A8050;font-size:.72rem">✓ Positive</span>'
+                tbl_mkt_ins += (f'<tr style="background:{bg3};border-bottom:1px solid #F5F3EF">'
+                                f'<td style="padding:.28rem .5rem">{rm["Market"]}</td>'
+                                f'<td style="text-align:center;font-weight:600;color:{uc3}">{"+" if rm["Uplift (pp)"]>=0 else ""}{rm["Uplift (pp)"]:.1f}pp</td>'
+                                f'<td style="text-align:center;color:#7030A0">{sig3}</td>'
+                                f'<td style="text-align:center;color:#AAA">{rm["n"]}</td>'
+                                f'<td>{signal}</td></tr>')
+            tbl_mkt_ins += '</tbody></table>'
+            if g_u2 is not None:
+                st.markdown(f'<div style="font-size:.78rem;color:#555;margin-bottom:.4rem">Average: <strong>{"+" if g_u2>=0 else ""}{g_u2:.1f}pp</strong></div>', unsafe_allow_html=True)
+            st.markdown(tbl_mkt_ins, unsafe_allow_html=True)
+        else:
+            st.markdown('<p style="color:#AAA;font-size:.8rem">Not enough market data.</p>', unsafe_allow_html=True)
+
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+
     # ── View toggle — Table default ───────────────────────────────────────────
     vmode=st.radio("View",["Table","Cards"])
 
@@ -1522,18 +2264,35 @@ elif page == "06 · Rulebook":
 
     st.markdown(f"""
     <div class="hero">
-      <div class="hero-eyebrow">Automated Alerts</div>
+      <div class="hero-eyebrow">So What · Page 6 of 6</div>
       <div class="hero-title">Rulebook</div>
-      <div class="hero-sub">Seven types of pattern detected automatically across all scopes.
-        Review high-severity entries before writing any brief.</div>
+      <div class="hero-sub">Automated risk and opportunity detection across all scopes.
+        Seven alert types surface trade-offs, market reversals, underused features, and
+        anti-patterns before they end up in a brief.</div>
     </div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="background:#F3EEFF;border-left:3px solid #7030A0;border-radius:0 4px 4px 0;
+      padding:.7rem 1rem;font-size:.82rem;color:#3A1A6A;margin-bottom:1.2rem;line-height:1.65;">
+      <strong>Analyst workflow:</strong> Filter by <strong>Severity: High</strong> first —
+      these are the alerts that can invalidate a brief if missed.
+      <strong>Heterogeneity</strong> alerts are the most critical: they mean a globally
+      positive feature reverses in a specific OU or market.
+      <strong>Conflict</strong> alerts flag metric trade-offs — brief with the dominant metric
+      for this campaign objective in mind.
+      <strong>Opportunity</strong> alerts point to features worth testing more.
+    </div>""", unsafe_allow_html=True)
+
+    sub_df, scope_filters, scope_key, min_n, scope_label, sel_camp_i = render_filters()
+    if len(sub_df) < 3:
+        st.warning(f"Only {len(sub_df)} assets match this filter — too few for analysis.")
+        st.stop()
+
 
     with st.expander("What does each rule type mean?"):
         st.markdown("""
 | Rule | What it means | What to do |
 |---|---|---|
 | **Conflict** | Feature improves one metric but hurts another | Check the trade-off — choose which metric matters more for this campaign |
-| **Heterogeneity** | Feature is positive globally but negative in a specific scope | Never brief from the global number alone — always check the specific OU/market first |
+| **Heterogeneity** | Feature is positive globally but negative in a specific scope | Never brief from the dataset average alone — always check the specific OU/market first |
 | **Boundary Condition** | Feature works in Video but not Print, or vice versa | Brief this feature only for the format where it works |
 | **Opportunity** | High positive effect but the feature appears in fewer than 20% of assets | This feature works — test more assets with it |
 | **Outlier** | One scope is unusually different from its peers | Investigate before briefing — the difference may be cultural or a tagging anomaly |

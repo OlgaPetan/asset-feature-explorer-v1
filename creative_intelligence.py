@@ -197,7 +197,7 @@ hr.div{border:none;border-top:1px solid #EAE8E2;margin:1.8rem 0;}
 
 
 # ── data loading ──────────────────────────────────────────────────────────────
-@st.cache(allow_output_mutation=True)
+@st.cache_data
 def load_all():
     with open("precomputed_data.pkl", "rb") as f:
         payload = pickle.load(f)
